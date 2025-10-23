@@ -22,7 +22,8 @@ const allowedOrigins = [
   "http://localhost:5173",
   "http://localhost:5174", 
   "http://localhost:5175",
-  "http://localhost:5176"
+  "http://localhost:5176",
+  "https://frontend-production-a002.up.railway.app"
 ];
 
 // เพิ่ม Production domains
@@ -47,6 +48,15 @@ app.use(cors({
   origin: allowedOrigins,
   credentials: true 
 }));
+
+// CORS logging for debugging
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  console.log(`🌐 CORS Request from: ${origin}`);
+  console.log(`✅ Allowed origins:`, allowedOrigins);
+  console.log(`🔍 Origin allowed:`, allowedOrigins.includes(origin));
+  next();
+});
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 

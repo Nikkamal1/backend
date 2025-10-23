@@ -89,7 +89,7 @@ npm start
 
 - ✅ `railway.json` - Railway configuration
 - ✅ `Procfile` - Process file for Railway
-- ✅ `nixpacks.toml` - Build configuration
+- ✅ `Dockerfile` - Alternative deployment option
 - ✅ `railway-deploy-guide.md` - This guide
 
 ### 4. **ไฟล์ที่แก้ไข**
