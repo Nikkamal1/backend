@@ -300,31 +300,53 @@ router.post('/webhook', async (req, res) => {
       
     } else if (req.body.events) {
       // LINE Messaging API webhook
-      // Debug log (remove in production)
-      if (process.env.NODE_ENV === 'development') {
-        console.log('💬 Processing LINE Messaging API webhook');
-      }
-      
-      const events = req.body.events;
-      
-      if (!events || events.length === 0) {
-        return res.status(200).json({ success: true, message: 'No events' });
-      }
-      
-      for (const event of events) {
-        if (event.type === 'message' && event.message.type === 'text') {
-          // Debug log (remove in production)
-          if (process.env.NODE_ENV === 'development') {
-            console.log(`📝 Received message from ${event.source.userId}: ${event.message.text}`);
-          }
-          
-          // ตอบกลับข้อความอัตโนมัติ
-          await lineService.sendMessage(event.source.userId, 'ขอบคุณสำหรับข้อความ! ระบบจะตอบกลับในภายหลัง');
+      try {
+        // Debug log (remove in production)
+        if (process.env.NODE_ENV === 'development') {
+          console.log('💬 Processing LINE Messaging API webhook');
+          console.log('📦 Webhook payload:', JSON.stringify(req.body, null, 2));
         }
+        
+        const events = req.body.events;
+        
+        if (!events || events.length === 0) {
+          return res.status(200).json({ success: true, message: 'No events' });
+        }
+        
+        for (const event of events) {
+          if (event.type === 'message' && event.message && event.message.type === 'text') {
+            // ตรวจสอบว่า event.source และ userId มีอยู่
+            if (event.source && event.source.userId) {
+              // Debug log (remove in production)
+              if (process.env.NODE_ENV === 'development') {
+                console.log(`📝 Received message from ${event.source.userId}: ${event.message.text}`);
+              }
+              
+              // ตอบกลับข้อความอัตโนมัติ
+              try {
+                await lineService.sendMessage(event.source.userId, 'ขอบคุณสำหรับข้อความ! ระบบจะตอบกลับในภายหลัง');
+              } catch (error) {
+                console.error('❌ Error sending auto-reply:', error.message);
+              }
+            } else {
+              console.warn('⚠️ Message event without valid source.userId:', JSON.stringify(event, null, 2));
+            }
+          } else {
+            if (process.env.NODE_ENV === 'development') {
+              console.log(`📋 Unhandled event type: ${event.type}`, JSON.stringify(event, null, 2));
+            }
+          }
+        }
+        
+        res.status(200).json({ success: true, message: 'Webhook processed' });
+      } catch (error) {
+        console.error('❌ LINE webhook processing error:', error);
+        res.status(500).json({ success: false, message: 'Webhook processing failed' });
       }
-      
-      res.status(200).json({ success: true, message: 'Webhook processed' });
     } else {
+      if (process.env.NODE_ENV === 'development') {
+        console.log('❓ Unknown webhook type:', JSON.stringify(req.body, null, 2));
+      }
       res.status(200).json({ success: true, message: 'Unknown webhook type' });
     }
     
