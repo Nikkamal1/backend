@@ -17,14 +17,30 @@ class LineService {
     
     if (this.isProduction || this.isRailway) {
       // Production: ใช้ Railway domain
-      this.baseUrl = process.env.RAILWAY_PUBLIC_DOMAIN 
-        ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
-        : process.env.CUSTOM_DOMAIN 
-        ? `https://${process.env.CUSTOM_DOMAIN}`
-        : process.env.NGROK_URL || 'https://83b3aa05f505.ngrok-free.app';
+      if (process.env.RAILWAY_PUBLIC_DOMAIN) {
+        // ตรวจสอบว่า domain มี https:// หรือไม่
+        this.baseUrl = process.env.RAILWAY_PUBLIC_DOMAIN.startsWith('https://')
+          ? process.env.RAILWAY_PUBLIC_DOMAIN
+          : `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`;
+      } else if (process.env.CUSTOM_DOMAIN) {
+        this.baseUrl = process.env.CUSTOM_DOMAIN.startsWith('https://')
+          ? process.env.CUSTOM_DOMAIN
+          : `https://${process.env.CUSTOM_DOMAIN}`;
+      } else {
+        this.baseUrl = process.env.NGROK_URL || 'https://83b3aa05f505.ngrok-free.app';
+      }
     } else {
       // Local Development: ใช้ ngrok
       this.baseUrl = process.env.NGROK_URL || 'https://83b3aa05f505.ngrok-free.app';
+    }
+    
+    // Debug logging
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🔧 LINE Service Configuration:');
+      console.log(`   - isProduction: ${this.isProduction}`);
+      console.log(`   - isRailway: ${this.isRailway}`);
+      console.log(`   - RAILWAY_PUBLIC_DOMAIN: ${process.env.RAILWAY_PUBLIC_DOMAIN}`);
+      console.log(`   - baseUrl: ${this.baseUrl}`);
     }
   }
 
