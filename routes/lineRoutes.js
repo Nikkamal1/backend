@@ -35,25 +35,76 @@ router.get('/login-callback', async (req, res) => {
     try {
       const { code, state } = req.query;  // GET parameter
       if (!code || !state) return res.status(400).send('Missing code or state');
-  
-      const stateData = JSON.parse(Buffer.from(state, 'base64').toString());
+
+      // Debug logging
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🔍 LINE Login Callback Debug:');
+        console.log(`   - code: ${code}`);
+        console.log(`   - state: ${state}`);
+        console.log(`   - state length: ${state.length}`);
+      }
+
+      let stateData;
+      try {
+        // Decode base64 state parameter
+        const decodedState = Buffer.from(state, 'base64').toString();
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`   - decoded state: ${decodedState}`);
+        }
+        stateData = JSON.parse(decodedState);
+      } catch (parseError) {
+        console.error('❌ State parsing error:', parseError);
+        console.error('❌ Raw state:', state);
+        return res.status(400).send('Invalid state parameter');
+      }
+
       const { userId } = stateData;
   
-      const tokenData = await lineService.exchangeCodeForToken(code);
-      const profile = await lineService.getLineProfile(tokenData.access_token);
+      // Exchange code for token
+      let tokenData;
+      try {
+        tokenData = await lineService.exchangeCodeForToken(code);
+        if (process.env.NODE_ENV === 'development') {
+          console.log('✅ Token exchange successful');
+        }
+      } catch (tokenError) {
+        console.error('❌ Token exchange error:', tokenError);
+        return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5174'}/line-callback?success=false&message=ไม่สามารถแลกเปลี่ยน authorization code ได้`);
+      }
+
+      // Get LINE profile
+      let profile;
+      try {
+        profile = await lineService.getLineProfile(tokenData.access_token);
+        if (process.env.NODE_ENV === 'development') {
+          console.log('✅ Profile retrieval successful:', profile.displayName);
+        }
+      } catch (profileError) {
+        console.error('❌ Profile retrieval error:', profileError);
+        return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5174'}/line-callback?success=false&message=ไม่สามารถดึงข้อมูลโปรไฟล์ LINE ได้`);
+      }
+
+      // Save LINE connection
+      try {
+        await lineService.saveLineConnection(userId, {
+          userId: profile.userId,
+          displayName: profile.displayName,
+          pictureUrl: profile.pictureUrl,
+          accessToken: tokenData.access_token,
+          refreshToken: tokenData.refresh_token
+        });
+        if (process.env.NODE_ENV === 'development') {
+          console.log('✅ LINE connection saved successfully');
+        }
+      } catch (saveError) {
+        console.error('❌ Save connection error:', saveError);
+        return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5174'}/line-callback?success=false&message=ไม่สามารถบันทึกการเชื่อมต่อ LINE ได้`);
+      }
   
-      await lineService.saveLineConnection(userId, {
-        userId: profile.userId,
-        displayName: profile.displayName,
-        pictureUrl: profile.pictureUrl,
-        accessToken: tokenData.access_token,
-        refreshToken: tokenData.refresh_token
-      });
-  
-      res.redirect(`${process.env.FRONTEND_URL}/line-callback?success=true&message=เชื่อมต่อ LINE สำเร็จ`);
+      res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5174'}/line-callback?success=true&message=เชื่อมต่อ LINE สำเร็จ`);
     } catch (error) {
-      console.error(error);
-      res.redirect(`${process.env.FRONTEND_URL}/line-callback?success=false&message=เกิดข้อผิดพลาดในการเชื่อมต่อ LINE`);
+      console.error('❌ LINE Login callback general error:', error);
+      res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5174'}/line-callback?success=false&message=เกิดข้อผิดพลาดในการเชื่อมต่อ LINE`);
     }
   });
   
