@@ -45,16 +45,35 @@ if (isProduction || isRailway) {
 }
 
 app.use(cors({ 
-  origin: allowedOrigins,
+  origin: function (origin, callback) {
+    // อนุญาต requests ที่ไม่มี origin (เช่น LINE webhook, server-to-server)
+    if (!origin) return callback(null, true);
+    
+    // อนุญาต origins ที่อยู่ใน allowed list
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    
+    // ปฏิเสธ origins อื่นๆ
+    return callback(new Error('Not allowed by CORS'));
+  },
   credentials: true 
 }));
 
 // CORS logging for debugging
 app.use((req, res, next) => {
   const origin = req.headers.origin;
-  console.log(`🌐 CORS Request from: ${origin}`);
-  console.log(`✅ Allowed origins:`, allowedOrigins);
-  console.log(`🔍 Origin allowed:`, allowedOrigins.includes(origin));
+  const userAgent = req.headers['user-agent'] || 'Unknown';
+  const isLineWebhook = userAgent.includes('LineBotWebhook') || req.path.includes('/api/line/');
+  
+  if (process.env.NODE_ENV === 'development') {
+    console.log(`🌐 CORS Request from: ${origin || 'undefined (no origin)'}`);
+    console.log(`🤖 User-Agent: ${userAgent}`);
+    console.log(`🔗 Path: ${req.path}`);
+    console.log(`📡 Is LINE Webhook: ${isLineWebhook}`);
+    console.log(`✅ Allowed origins:`, allowedOrigins);
+    console.log(`🔍 Origin allowed: ${!origin || allowedOrigins.includes(origin)}`);
+  }
   next();
 });
 app.use(express.json({ limit: '10mb' }));
