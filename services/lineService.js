@@ -35,25 +35,36 @@ class LineService {
     }
     
     // Debug logging
-    if (process.env.NODE_ENV === 'development') {
-      console.log('🔧 LINE Service Configuration:');
-      console.log(`   - isProduction: ${this.isProduction}`);
-      console.log(`   - isRailway: ${this.isRailway}`);
-      console.log(`   - RAILWAY_PUBLIC_DOMAIN: ${process.env.RAILWAY_PUBLIC_DOMAIN}`);
-      console.log(`   - baseUrl: ${this.baseUrl}`);
-    }
+    console.log('🔧 LINE Service Configuration:');
+    console.log(`   - isProduction: ${this.isProduction}`);
+    console.log(`   - isRailway: ${this.isRailway}`);
+    console.log(`   - RAILWAY_PUBLIC_DOMAIN: ${process.env.RAILWAY_PUBLIC_DOMAIN}`);
+    console.log(`   - baseUrl: ${this.baseUrl}`);
+    console.log(`   - loginChannelId: ${this.loginChannelId}`);
+    console.log(`   - messagingChannelId: ${this.messagingChannelId}`);
   }
 
   // สร้าง URL สำหรับ LINE Login
   generateLineLoginUrl(state) {
+    const redirectUri = `${this.baseUrl}/api/line/login-callback`;
+    console.log('🔗 Generating LINE Login URL:');
+    console.log(`   - baseUrl: ${this.baseUrl}`);
+    console.log(`   - redirectUri: ${redirectUri}`);
+    console.log(`   - client_id: ${this.loginChannelId}`);
+    console.log(`   - state: ${state}`);
+    
     const params = new URLSearchParams({
       response_type: 'code',
       client_id: this.loginChannelId,
-      redirect_uri: `${this.baseUrl}/api/line/login-callback`,
+      redirect_uri: redirectUri,
       state: state,
       scope: 'profile openid'
     });
-    return `https://access.line.me/oauth2/v2.1/authorize?${params.toString()}`;
+    
+    const loginUrl = `https://access.line.me/oauth2/v2.1/authorize?${params.toString()}`;
+    console.log(`   - Generated URL: ${loginUrl}`);
+    
+    return loginUrl;
   }
   
 
