@@ -5,7 +5,6 @@ import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import { getConnection } from "./db.js";
 import bcrypt from "bcryptjs";
-import nodemailer from "nodemailer";
 import { locations } from "./locations.js";
 import { jsPDF } from "jspdf";
 import 'jspdf-autotable';
