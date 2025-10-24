@@ -429,6 +429,7 @@ app.post("/register", authLimiter, async (req, res) => {
           // 🛡️ If email fails, still allow registration but log the OTP
           console.log(`⚠️ Email failed for user ${email}, OTP: ${otp}`);
           // Don't throw error, just continue
+          emailSent = false;
           break;
         }
       }
@@ -450,14 +451,22 @@ app.post("/register", authLimiter, async (req, res) => {
   } catch (err) {
     console.error("Register error:", err);
     
-    // 🛡️ Check if it's an email sending error
-    if (err.code === 'ETIMEDOUT' || err.code === 'ECONNREFUSED' || err.message.includes('timeout')) {
+    // 🛡️ Check if it's a database error (not email error)
+    if (err.code === 'ER_DUP_ENTRY') {
+      res.status(400).json({ 
+        success: false, 
+        message: "อีเมล์นี้มีผู้ใช้งานแล้ว" 
+      });
+    } else if (err.code === 'ER_BAD_NULL_ERROR' || err.code === 'ER_NO_DEFAULT_FOR_FIELD') {
       res.status(500).json({ 
         success: false, 
-        message: "ไม่สามารถส่ง OTP ได้ในขณะนี้ กรุณาลองใหม่อีกครั้งในภายหลัง" 
+        message: "เกิดข้อผิดพลาดในระบบ กรุณาลองใหม่อีกครั้ง" 
       });
     } else {
-      res.status(500).json({ success: false, message: err.message });
+      res.status(500).json({ 
+        success: false, 
+        message: "เกิดข้อผิดพลาดในระบบ กรุณาลองใหม่อีกครั้ง" 
+      });
     }
   }
 });
