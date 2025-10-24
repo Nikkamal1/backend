@@ -130,29 +130,25 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 
 
-// ==================== Nodemailer ====================
+// ==================== Nodemailer (SendGrid) ====================
 const transporter = nodemailer.createTransport({
-  host: process.env.EMAIL_HOST,
-  port: process.env.EMAIL_PORT,
+  host: 'smtp.sendgrid.net',
+  port: 587,
   secure: false, // true for 465, false for other ports
   auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
+    user: 'apikey', // SendGrid requires 'apikey' as username
+    pass: process.env.SENDGRID_API_KEY, // Your SendGrid API key
   },
-  // 🛡️ Connection timeout settings (shorter for Railway)
-  connectionTimeout: 15000, // 15 seconds
-  greetingTimeout: 10000,   // 10 seconds
-  socketTimeout: 15000,     // 15 seconds
+  // 🛡️ Connection timeout settings (SendGrid is faster)
+  connectionTimeout: 30000, // 30 seconds
+  greetingTimeout: 15000,   // 15 seconds
+  socketTimeout: 30000,     // 30 seconds
   // 🛡️ Disable pooling for Railway
   pool: false,
-  // 🛡️ TLS settings for Gmail
+  // 🛡️ TLS settings for SendGrid
   tls: {
-    rejectUnauthorized: false,
-    ciphers: 'SSLv3'
+    rejectUnauthorized: false
   },
-  // 🛡️ Additional settings for Railway
-  ignoreTLS: false,
-  requireTLS: true,
   debug: process.env.NODE_ENV === 'development'
 });
 
@@ -386,26 +382,23 @@ app.post("/register", authLimiter, async (req, res) => {
     while (!emailSent && retryCount < maxRetries) {
       try {
         console.log(`📧 Attempting to send email (attempt ${retryCount + 1}/${maxRetries}) to ${email}`);
-        // 🛡️ Create new transporter for each attempt (optimized for Gmail)
+        // 🛡️ Create new transporter for each attempt (using SendGrid)
         const tempTransporter = nodemailer.createTransport({
-          service: 'gmail', // ใช้ Gmail service แทน host/port
+          host: 'smtp.sendgrid.net',
+          port: 587,
+          secure: false, // true for 465, false for other ports
           auth: {
-            user: process.env.EMAIL_USER,
-            pass: process.env.EMAIL_PASS,
+            user: 'apikey', // SendGrid requires 'apikey' as username
+            pass: process.env.SENDGRID_API_KEY, // Your SendGrid API key
           },
-          connectionTimeout: 60000, // 60 seconds
-          greetingTimeout: 30000,   // 30 seconds
-          socketTimeout: 60000,     // 60 seconds
+          connectionTimeout: 30000, // 30 seconds (SendGrid is faster)
+          greetingTimeout: 15000,   // 15 seconds
+          socketTimeout: 30000,     // 30 seconds
           pool: false,
           tls: {
-            rejectUnauthorized: false,
-            ciphers: 'SSLv3'
+            rejectUnauthorized: false
           },
-          debug: process.env.NODE_ENV === 'development',
-          // เพิ่มการตั้งค่าเพิ่มเติมสำหรับ Gmail
-          secure: false,
-          requireTLS: true,
-          ignoreTLS: false
+          debug: process.env.NODE_ENV === 'development'
         });
 
         await tempTransporter.sendMail({
@@ -476,8 +469,9 @@ app.post("/register", authLimiter, async (req, res) => {
         } else {
           // 🛡️ If email fails, still allow registration but log the OTP
           console.log(`⚠️ Email failed for user ${email}, OTP: ${otp}`);
-          console.log(`📧 SMTP Configuration: ${process.env.EMAIL_HOST}:${process.env.EMAIL_PORT}`);
-          console.log(`📧 Email User: ${process.env.EMAIL_USER}`);
+          console.log(`📧 SendGrid Configuration: smtp.sendgrid.net:587`);
+          console.log(`📧 SendGrid API Key: ${process.env.SENDGRID_API_KEY ? 'Configured' : 'Not configured'}`);
+          console.log(`📧 From Email: ${process.env.EMAIL_USER}`);
           // Don't throw error, just continue
           emailSent = false;
           break;
@@ -1253,7 +1247,7 @@ app.get("/health/detailed", async (req, res) => {
       services: {
         database: "connected",
         api: "running",
-        email: process.env.EMAIL_HOST ? "configured" : "not_configured"
+        email: process.env.SENDGRID_API_KEY ? "sendgrid_configured" : "not_configured"
       }
     });
   } catch (err) {
@@ -1270,11 +1264,11 @@ app.get("/health/detailed", async (req, res) => {
 // =================== Email Health Check =================== //
 app.get("/health/email", async (req, res) => {
   try {
-    if (!process.env.EMAIL_HOST) {
+    if (!process.env.SENDGRID_API_KEY) {
       return res.json({
         success: false,
         status: "not_configured",
-        message: "Email not configured"
+        message: "SendGrid API key not configured"
       });
     }
 
@@ -1495,7 +1489,7 @@ const server = app.listen(PORT, HOST, () => {
   console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`📊 Frontend URL: ${process.env.FRONTEND_URL || 'http://localhost:5173'}`);
   console.log(`🔗 Health Check: http://${HOST}:${PORT}/health`);
-  console.log(`📧 Email Config: ${process.env.EMAIL_HOST ? 'Configured' : 'Not configured'}`);
+  console.log(`📧 Email Config: ${process.env.SENDGRID_API_KEY ? 'SendGrid Configured' : 'Not configured'}`);
   console.log(`🗄️ Database: ${process.env.DB_HOST ? 'Configured' : 'Not configured'}`);
 });
 
