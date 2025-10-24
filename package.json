@@ -20,6 +20,7 @@
     "npm": ">=10.0.0"
   },
   "dependencies": {
+    "@emailjs/nodejs": "^5.0.2",
     "@line/bot-sdk": "^10.3.0",
     "axios": "^1.12.2",
     "bcryptjs": "^3.0.2",
@@ -33,7 +34,6 @@
     "jspdf": "^3.0.3",
     "jspdf-autotable": "^5.0.2",
     "mysql2": "^3.15.2",
-    "node-fetch": "^3.3.2",
-    "resend": "^3.2.0"
+    "node-fetch": "^3.3.2"
   }
 }
