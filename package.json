@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "start": "node server.js",
+    "start": "NODE_ENV=production node server.js",
     "build": "echo 'No build step required'",
     "dev": "NODE_ENV=development node server.js",
     "dev:local": "NODE_ENV=development node server.js",

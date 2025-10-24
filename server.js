@@ -1163,24 +1163,13 @@ app.get("/admin/statistics", async (req, res) => {
 // =================== System Health Check =================== //
 // Basic health check (for Railway deployment)
 app.get("/health", (req, res) => {
-  try {
-    res.status(200).json({
-      success: true,
-      status: "healthy",
-      timestamp: new Date().toISOString(),
-      message: "Server is running",
-      environment: process.env.NODE_ENV || 'development',
-      port: process.env.PORT || 3001
-    });
-  } catch (err) {
-    res.status(500).json({
-      success: false,
-      status: "error",
-      timestamp: new Date().toISOString(),
-      message: "Health check failed",
-      error: err.message
-    });
-  }
+  // Ultra-simple health check - no try/catch, no database calls
+  res.status(200).json({
+    success: true,
+    status: "healthy",
+    timestamp: new Date().toISOString(),
+    message: "Server is running"
+  });
 });
 
 // Detailed health check (for monitoring)
@@ -1444,6 +1433,7 @@ const server = app.listen(PORT, HOST, () => {
   console.log(`🔗 Health Check: http://${HOST}:${PORT}/health`);
   console.log(`📧 Email Config: ${process.env.RESEND_API_KEY ? 'Resend Configured' : 'Not configured'}`);
   console.log(`🗄️ Database: ${process.env.DB_HOST ? 'Configured' : 'Not configured'}`);
+  console.log(`✅ Server ready for health checks`);
 });
 
 // Handle server errors
