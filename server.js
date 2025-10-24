@@ -358,7 +358,12 @@ app.post("/register", authLimiter, async (req, res) => {
     );
     if (existingOTP) {
       await connection.end();
-      return res.status(400).json({ success: false, message: "กรุณารอสักครู่ก่อนขอ OTP ใหม่" });
+      return res.status(200).json({ 
+        success: true, 
+        message: "มี OTP ที่ยังไม่หมดอายุอยู่แล้ว กรุณาตรวจสอบอีเมลของคุณ",
+        otp: existingOTP.otp, // ส่ง OTP เก่ากลับไป
+        emailSent: true
+      });
     }
 
     // สร้าง OTP และเก็บข้อมูลไว้ใน email_otps (ยังไม่สร้าง user)
