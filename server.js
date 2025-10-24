@@ -352,7 +352,7 @@ app.post("/register", authLimiter, async (req, res) => {
     }
 
     // ตรวจสอบว่ามี OTP ที่ยังไม่หมดอายุอยู่หรือไม่ (10 นาที)
-    const tenMinutesAgo = new Date(Date.now()  1000);
+    const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
     const [[existingOTP]] = await connection.query(
       `SELECT * FROM email_otps WHERE email = ? AND type = 'register' AND is_used = 0 AND created_at > ?`,
       [email, tenMinutesAgo]
