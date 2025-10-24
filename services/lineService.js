@@ -1,4 +1,3 @@
-// lineService.js
 import axios from 'axios';
 import { getConnection } from '../db.js';
 
@@ -7,18 +6,15 @@ class LineService {
     this.loginChannelId = process.env.LINE_LOGIN_CHANNEL_ID;
     this.loginChannelSecret = process.env.LINE_LOGIN_CHANNEL_SECRET;
     this.messagingChannelId = process.env.LINE_MESSAGING_CHANNEL_ID;
-    this.messagingChannelSecret = process.env.LINE_MESSAGING_CHANNEL_SECRET;
     this.messagingAccessToken = process.env.LINE_MESSAGING_ACCESS_TOKEN;
     this.frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
 
-    // ✅ ใช้ BASE URL จาก production หรือ local
     this.baseUrl = process.env.RAILWAY_PUBLIC_DOMAIN
       ? (process.env.RAILWAY_PUBLIC_DOMAIN.startsWith('https://')
           ? process.env.RAILWAY_PUBLIC_DOMAIN
           : `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`)
       : 'http://localhost:3001';
 
-    // ✅ ใช้ CALLBACK URL จาก .env ถ้ามี
     this.callbackUrl =
       process.env.LINE_CALLBACK_URL ||
       `${this.baseUrl}/api/line/login-callback`;
@@ -32,7 +28,6 @@ class LineService {
   // ✅ สร้าง URL สำหรับ LINE Login
   generateLineLoginUrl(state) {
     const redirectUri = this.callbackUrl;
-
     const params = new URLSearchParams({
       response_type: 'code',
       client_id: this.loginChannelId,
@@ -43,7 +38,6 @@ class LineService {
 
     const loginUrl = `https://access.line.me/oauth2/v2.1/authorize?${params.toString()}`;
     console.log('🔗 LINE Login URL generated:', loginUrl);
-
     return loginUrl;
   }
 
@@ -63,23 +57,17 @@ class LineService {
       );
       return response.data;
     } catch (error) {
-      console.error(
-        'Error exchanging code for token:',
-        error.response?.data || error.message
-      );
+      console.error('Error exchanging code for token:', error.response?.data || error.message);
       throw error;
     }
   }
 
-  // ดึงข้อมูลโปรไฟล์จาก LINE
+  // ✅ ดึงข้อมูลโปรไฟล์จาก LINE
   async getLineProfile(accessToken) {
     try {
       const response = await axios.get('https://api.line.me/v2/profile', {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`
-        }
+        headers: { Authorization: `Bearer ${accessToken}` },
       });
-      
       return response.data;
     } catch (error) {
       console.error('Error getting LINE profile:', error.response?.data || error.message);
@@ -87,39 +75,37 @@ class LineService {
     }
   }
 
-  // บันทึกการเชื่อมต่อ LINE กับ user
+  // ✅ บันทึกการเชื่อมต่อ LINE กับ user
   async saveLineConnection(userId, lineData) {
     const connection = await getConnection();
-    
+
     try {
-      // ตรวจสอบว่ามีการเชื่อมต่ออยู่แล้วหรือไม่
       const [existing] = await connection.query(
-        'SELECT * FROM user_line_connections WHERE user_id = ? OR line_user_id = ?',
+        'SELECT * FROM user_line_connections WHERE user_id = ? AND line_user_id = ?',
         [userId, lineData.userId]
       );
 
       if (existing.length > 0) {
-        // อัปเดตการเชื่อมต่อที่มีอยู่
         await connection.query(
-          `UPDATE user_line_connections SET 
-           line_user_id = ?, line_display_name = ?, line_picture_url = ?, 
-           access_token = ?, refresh_token = ?, is_active = 1, 
-           connected_at = CURRENT_TIMESTAMP, last_used_at = CURRENT_TIMESTAMP
-           WHERE user_id = ? OR line_user_id = ?`,
+          `UPDATE user_line_connections 
+           SET line_display_name = ?, line_picture_url = ?, 
+               access_token = ?, refresh_token = ?, is_active = 1, 
+               last_used_at = CURRENT_TIMESTAMP
+           WHERE user_id = ? AND line_user_id = ?`,
           [
-            lineData.userId, lineData.displayName, lineData.pictureUrl,
-            lineData.accessToken, lineData.refreshToken, userId, lineData.userId
+            lineData.displayName, lineData.pictureUrl,
+            lineData.accessToken, lineData.refreshToken,
+            userId, lineData.userId,
           ]
         );
       } else {
-        // สร้างการเชื่อมต่อใหม่
         await connection.query(
           `INSERT INTO user_line_connections 
            (user_id, line_user_id, line_display_name, line_picture_url, access_token, refresh_token, is_active) 
            VALUES (?, ?, ?, ?, ?, ?, 1)`,
           [
             userId, lineData.userId, lineData.displayName, lineData.pictureUrl,
-            lineData.accessToken, lineData.refreshToken
+            lineData.accessToken, lineData.refreshToken,
           ]
         );
       }
@@ -133,41 +119,63 @@ class LineService {
     }
   }
 
-  // ดึงข้อมูลการเชื่อมต่อ LINE ของ user
-  async getLineConnection(userId) {
+  // ✅ ดึงข้อมูลการเชื่อมต่อ LINE ของ user (ทั้งหมด)
+  async getLineConnections(userId) {
     const connection = await getConnection();
-    
     try {
       const [connections] = await connection.query(
         'SELECT * FROM user_line_connections WHERE user_id = ? AND is_active = 1',
         [userId]
       );
-      
-      return connections.length > 0 ? connections[0] : null;
+      return connections;
     } catch (error) {
-      console.error('Error getting LINE connection:', error);
+      console.error('Error getting LINE connections:', error);
       throw error;
     } finally {
       await connection.end();
     }
   }
 
-  // ส่งข้อความผ่าน LINE
+  // ✅ ยกเลิกการเชื่อมต่อ (บาง LINE หรือทั้งหมด)
+  async disconnectLine(userId, lineUserId = null) {
+    const connection = await getConnection();
+    try {
+      if (lineUserId) {
+        await connection.query(
+          'UPDATE user_line_connections SET is_active = 0 WHERE user_id = ? AND line_user_id = ?',
+          [userId, lineUserId]
+        );
+      } else {
+        await connection.query(
+          'UPDATE user_line_connections SET is_active = 0 WHERE user_id = ?',
+          [userId]
+        );
+      }
+      return true;
+    } catch (error) {
+      console.error('Error disconnecting LINE:', error);
+      throw error;
+    } finally {
+      await connection.end();
+    }
+  }
+
+  // ✅ ส่งข้อความผ่าน LINE
   async sendMessage(lineUserId, message) {
     try {
-      const response = await axios.post('https://api.line.me/v2/bot/message/push', {
-        to: lineUserId,
-        messages: [{
-          type: 'text',
-          text: message
-        }]
-      }, {
-        headers: {
-          'Authorization': `Bearer ${this.messagingAccessToken}`,
-          'Content-Type': 'application/json'
+      const response = await axios.post(
+        'https://api.line.me/v2/bot/message/push',
+        {
+          to: lineUserId,
+          messages: [{ type: 'text', text: message }],
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${this.messagingAccessToken}`,
+            'Content-Type': 'application/json',
+          },
         }
-      });
-      
+      );
       return response.data;
     } catch (error) {
       console.error('Error sending LINE message:', error.response?.data || error.message);
@@ -175,106 +183,69 @@ class LineService {
     }
   }
 
-  // ส่งการแจ้งเตือนการจอง
+  // ✅ ส่งการแจ้งเตือนการจอง (หลายไลน์)
   async sendAppointmentNotification(userId, appointmentId, notificationType) {
     const connection = await getConnection();
-    
     try {
-      // ดึงข้อมูลการเชื่อมต่อ LINE
-      const lineConnection = await this.getLineConnection(userId);
-      if (!lineConnection) {
-        // Debug log (remove in production)
-        if (process.env.NODE_ENV === 'development') {
-          console.log(`User ${userId} has no LINE connection`);
-        }
+      const lineConnections = await this.getLineConnections(userId);
+      if (lineConnections.length === 0) {
+        console.log(`User ${userId} has no LINE connections`);
         return false;
       }
 
-      // ดึงข้อมูลการจอง
       const [appointments] = await connection.query(
         'SELECT * FROM appointments WHERE id = ?',
         [appointmentId]
       );
-      
-      if (appointments.length === 0) {
-        throw new Error('Appointment not found');
-      }
-      
+      if (appointments.length === 0) throw new Error('Appointment not found');
       const appointment = appointments[0];
-      
-      // สร้างข้อความแจ้งเตือน
+
       let message = '';
       switch (notificationType) {
         case 'appointment_approved':
-          message = `✅ การจองของคุณได้รับการอนุมัติแล้ว!\n\n`;
-          message += `📅 วันที่: ${new Date(appointment.appointment_date).toLocaleDateString('th-TH')}\n`;
-          message += `🕐 เวลา: ${appointment.appointment_time}\n`;
-          message += `🏥 โรงพยาบาล: ${appointment.hospital}\n`;
-          message += `📍 ที่อยู่: ${appointment.province} ${appointment.district} ${appointment.subdistrict}`;
+          message = `✅ การจองของคุณได้รับการอนุมัติแล้ว!\n\n` +
+                    `📅 วันที่: ${new Date(appointment.appointment_date).toLocaleDateString('th-TH')}\n` +
+                    `🕐 เวลา: ${appointment.appointment_time}\n` +
+                    `🏥 โรงพยาบาล: ${appointment.hospital}`;
           break;
-          
         case 'appointment_rejected':
-          message = `❌ การจองของคุณถูกปฏิเสธ\n\n`;
-          message += `📅 วันที่: ${new Date(appointment.appointment_date).toLocaleDateString('th-TH')}\n`;
-          message += `🕐 เวลา: ${appointment.appointment_time}\n`;
-          message += `🏥 โรงพยาบาล: ${appointment.hospital}\n\n`;
-          message += `กรุณาติดต่อเจ้าหน้าที่เพื่อสอบถามรายละเอียดเพิ่มเติม`;
+          message = `❌ การจองของคุณถูกปฏิเสธ\n\n` +
+                    `📅 วันที่: ${new Date(appointment.appointment_date).toLocaleDateString('th-TH')}\n` +
+                    `🕐 เวลา: ${appointment.appointment_time}\n` +
+                    `🏥 โรงพยาบาล: ${appointment.hospital}`;
           break;
-          
         case 'appointment_cancelled':
-          message = `🚫 การจองของคุณถูกยกเลิก\n\n`;
-          message += `📅 วันที่: ${new Date(appointment.appointment_date).toLocaleDateString('th-TH')}\n`;
-          message += `🕐 เวลา: ${appointment.appointment_time}\n`;
-          message += `🏥 โรงพยาบาล: ${appointment.hospital}`;
+          message = `🚫 การจองของคุณถูกยกเลิก\n\n` +
+                    `📅 วันที่: ${new Date(appointment.appointment_date).toLocaleDateString('th-TH')}\n` +
+                    `🕐 เวลา: ${appointment.appointment_time}\n` +
+                    `🏥 โรงพยาบาล: ${appointment.hospital}`;
           break;
-          
         default:
           throw new Error('Invalid notification type');
       }
 
-      // ส่งข้อความ
-      await this.sendMessage(lineConnection.line_user_id, message);
-      
-      // บันทึกการแจ้งเตือน
+      // ส่งข้อความให้ทุก LINE ที่เชื่อมอยู่
+      for (const conn of lineConnections) {
+        await this.sendMessage(conn.line_user_id, message);
+      }
+
       await connection.query(
         `INSERT INTO line_notifications 
          (user_id, appointment_id, notification_type, message, status) 
          VALUES (?, ?, ?, ?, 'sent')`,
         [userId, appointmentId, notificationType, message]
       );
-      
+
       return true;
     } catch (error) {
       console.error('Error sending appointment notification:', error);
-      
-      // บันทึกข้อผิดพลาด
       await connection.query(
         `INSERT INTO line_notifications 
          (user_id, appointment_id, notification_type, message, status, error_message) 
          VALUES (?, ?, ?, ?, 'failed', ?)`,
         [userId, appointmentId, notificationType, '', error.message]
       );
-      
       return false;
-    } finally {
-      await connection.end();
-    }
-  }
-
-  // ยกเลิกการเชื่อมต่อ LINE
-  async disconnectLine(userId) {
-    const connection = await getConnection();
-    
-    try {
-      await connection.query(
-        'UPDATE user_line_connections SET is_active = 0 WHERE user_id = ?',
-        [userId]
-      );
-      
-      return true;
-    } catch (error) {
-      console.error('Error disconnecting LINE:', error);
-      throw error;
     } finally {
       await connection.end();
     }
