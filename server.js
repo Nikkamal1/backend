@@ -381,10 +381,11 @@ app.post("/register", authLimiter, async (req, res) => {
     // 🛡️ Send email with retry mechanism
     let emailSent = false;
     let retryCount = 0;
-    const maxRetries = 2; // ลดจำนวน retry สำหรับ Railway
+    const maxRetries = 3; // เพิ่มจำนวน retry
     
     while (!emailSent && retryCount < maxRetries) {
       try {
+        console.log(`📧 Attempting to send email (attempt ${retryCount + 1}/${maxRetries}) to ${email}`);
         // 🛡️ Create new transporter for each attempt (optimized for Gmail)
         const tempTransporter = nodemailer.createTransport({
           service: 'gmail', // ใช้ Gmail service แทน host/port
@@ -392,15 +393,19 @@ app.post("/register", authLimiter, async (req, res) => {
             user: process.env.EMAIL_USER,
             pass: process.env.EMAIL_PASS,
           },
-          connectionTimeout: 30000, // 30 seconds
-          greetingTimeout: 15000,   // 15 seconds
-          socketTimeout: 30000,     // 30 seconds
+          connectionTimeout: 60000, // 60 seconds
+          greetingTimeout: 30000,   // 30 seconds
+          socketTimeout: 60000,     // 60 seconds
           pool: false,
           tls: {
             rejectUnauthorized: false,
             ciphers: 'SSLv3'
           },
-          debug: process.env.NODE_ENV === 'development'
+          debug: process.env.NODE_ENV === 'development',
+          // เพิ่มการตั้งค่าเพิ่มเติมสำหรับ Gmail
+          secure: false,
+          requireTLS: true,
+          ignoreTLS: false
         });
 
         await tempTransporter.sendMail({
@@ -458,13 +463,16 @@ app.post("/register", authLimiter, async (req, res) => {
         // Close the temporary transporter
         tempTransporter.close();
         emailSent = true;
+        console.log(`✅ Email sent successfully to ${email}`);
       } catch (emailError) {
         retryCount++;
         console.error(`Email send attempt ${retryCount} failed:`, emailError.message);
         
         if (retryCount < maxRetries) {
-          // Wait before retry
-          await new Promise(resolve => setTimeout(resolve, 2000));
+          // Wait before retry (exponential backoff)
+          const delay = Math.min(5000 * Math.pow(2, retryCount - 1), 15000); // 5s, 10s, 15s
+          console.log(`⏳ Waiting ${delay/1000}s before retry ${retryCount + 1}/${maxRetries}`);
+          await new Promise(resolve => setTimeout(resolve, delay));
         } else {
           // 🛡️ If email fails, still allow registration but log the OTP
           console.log(`⚠️ Email failed for user ${email}, OTP: ${otp}`);
