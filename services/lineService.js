@@ -10,84 +10,63 @@ class LineService {
     this.messagingChannelSecret = process.env.LINE_MESSAGING_CHANNEL_SECRET;
     this.messagingAccessToken = process.env.LINE_MESSAGING_ACCESS_TOKEN;
     this.frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-    
-    // รองรับทั้ง Local (ngrok) และ Production (Railway)
-    this.isProduction = process.env.NODE_ENV === 'production';
-    this.isRailway = process.env.RAILWAY_PUBLIC_DOMAIN;
-    
-    if (this.isProduction || this.isRailway) {
-      // Production: ใช้ Railway domain
-      if (process.env.RAILWAY_PUBLIC_DOMAIN) {
-        // ตรวจสอบว่า domain มี https:// หรือไม่
-        this.baseUrl = process.env.RAILWAY_PUBLIC_DOMAIN.startsWith('https://')
+
+    // ✅ ใช้ BASE URL จาก production หรือ local
+    this.baseUrl = process.env.RAILWAY_PUBLIC_DOMAIN
+      ? (process.env.RAILWAY_PUBLIC_DOMAIN.startsWith('https://')
           ? process.env.RAILWAY_PUBLIC_DOMAIN
-          : `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`;
-      } else if (process.env.CUSTOM_DOMAIN) {
-        this.baseUrl = process.env.CUSTOM_DOMAIN.startsWith('https://')
-          ? process.env.CUSTOM_DOMAIN
-          : `https://${process.env.CUSTOM_DOMAIN}`;
-      } else {
-        this.baseUrl = process.env.NGROK_URL || 'https://83b3aa05f505.ngrok-free.app';
-      }
-    } else {
-      // Local Development: ใช้ ngrok
-      this.baseUrl = process.env.NGROK_URL || 'https://83b3aa05f505.ngrok-free.app';
-    }
-    
-    // Debug logging
+          : `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`)
+      : 'http://localhost:3001';
+
+    // ✅ ใช้ CALLBACK URL จาก .env ถ้ามี
+    this.callbackUrl =
+      process.env.LINE_CALLBACK_URL ||
+      `${this.baseUrl}/api/line/login-callback`;
+
     console.log('🔧 LINE Service Configuration:');
-    console.log(`   - isProduction: ${this.isProduction}`);
-    console.log(`   - isRailway: ${this.isRailway}`);
-    console.log(`   - RAILWAY_PUBLIC_DOMAIN: ${process.env.RAILWAY_PUBLIC_DOMAIN}`);
+    console.log(`   - NODE_ENV: ${process.env.NODE_ENV}`);
     console.log(`   - baseUrl: ${this.baseUrl}`);
-    console.log(`   - loginChannelId: ${this.loginChannelId}`);
-    console.log(`   - messagingChannelId: ${this.messagingChannelId}`);
+    console.log(`   - callbackUrl: ${this.callbackUrl}`);
   }
 
-  // สร้าง URL สำหรับ LINE Login
+  // ✅ สร้าง URL สำหรับ LINE Login
   generateLineLoginUrl(state) {
-    const redirectUri = `${this.baseUrl}/api/line/login-callback`;
-    console.log('🔗 Generating LINE Login URL:');
-    console.log(`   - baseUrl: ${this.baseUrl}`);
-    console.log(`   - redirectUri: ${redirectUri}`);
-    console.log(`   - client_id: ${this.loginChannelId}`);
-    console.log(`   - state: ${state}`);
-    
+    const redirectUri = this.callbackUrl;
+
     const params = new URLSearchParams({
       response_type: 'code',
       client_id: this.loginChannelId,
       redirect_uri: redirectUri,
-      state: state,
-      scope: 'profile openid'
+      state,
+      scope: 'profile openid',
     });
-    
+
     const loginUrl = `https://access.line.me/oauth2/v2.1/authorize?${params.toString()}`;
-    console.log(`   - Generated URL: ${loginUrl}`);
-    
+    console.log('🔗 LINE Login URL generated:', loginUrl);
+
     return loginUrl;
   }
-  
 
-  // แลกเปลี่ยน authorization code เป็น access token
+  // ✅ แลก code เป็น token
   async exchangeCodeForToken(code) {
     try {
-      const response = await axios.post('https://api.line.me/oauth2/v2.1/token', 
+      const response = await axios.post(
+        'https://api.line.me/oauth2/v2.1/token',
         new URLSearchParams({
           grant_type: 'authorization_code',
-          code: code,
-          redirect_uri: `${this.baseUrl}/api/line/login-callback`,
+          code,
+          redirect_uri: this.callbackUrl,
           client_id: this.loginChannelId,
-          client_secret: this.loginChannelSecret
-        }), {
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded'
-          }
-        }
+          client_secret: this.loginChannelSecret,
+        }),
+        { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
       );
-      
       return response.data;
     } catch (error) {
-      console.error('Error exchanging code for token:', error.response?.data || error.message);
+      console.error(
+        'Error exchanging code for token:',
+        error.response?.data || error.message
+      );
       throw error;
     }
   }

@@ -78,7 +78,7 @@ console.log('Always show'); // จะแสดงใน production
 NODE_ENV=development
 DB_HOST=localhost
 FRONTEND_URL=http://localhost:5173
-NGROK_URL=https://your-ngrok-url.ngrok-free.app
+RAILWAY_PUBLIC_DOMAIN=your-backend-domain.railway.app
 ```
 
 ### **Production (Railway)**

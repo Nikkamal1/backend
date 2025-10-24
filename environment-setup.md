@@ -18,16 +18,15 @@ DB_NAME=railway
 DB_PORT=3306
 PORT=3001
 FRONTEND_URL=http://localhost:5173
-NGROK_URL=https://your-ngrok-url.ngrok-free.app
+RAILWAY_PUBLIC_DOMAIN=your-backend-domain.railway.app
 ```
 
-#### 2. **เริ่มต้น ngrok**
+#### 2. **เริ่มต้น Server**
 ```bash
 # เปิด terminal ใหม่
-npx ngrok http 3001
+npm run dev
 
-# Copy ngrok URL ไปใส่ใน .env
-NGROK_URL=https://xxxxx.ngrok-free.app
+# Server จะรันที่ http://localhost:3001
 ```
 
 #### 3. **เริ่มต้น Server**
@@ -66,21 +65,21 @@ npm start
 1. เปลี่ยน `NODE_ENV=production`
 2. เปลี่ยน `DB_HOST` เป็น Railway MySQL
 3. เปลี่ยน `FRONTEND_URL` เป็น Railway domain
-4. เปลี่ยน `NGROK_URL` เป็น Railway domain
+4. เปลี่ยน `RAILWAY_PUBLIC_DOMAIN` เป็น Railway domain
 5. อัปเดต LINE Developers Console
 
 ### **Production → Local**
 1. เปลี่ยน `NODE_ENV=development`
 2. เปลี่ยน `DB_HOST` เป็น localhost
 3. เปลี่ยน `FRONTEND_URL` เป็น localhost
-4. เปลี่ยน `NGROK_URL` เป็น ngrok URL
+4. เปลี่ยน `RAILWAY_PUBLIC_DOMAIN` เป็น localhost
 5. อัปเดต LINE Developers Console
 
 ## 🚨 LINE Configuration
 
 ### **Local Development**
-- **Callback URL**: `https://your-ngrok-url.ngrok-free.app/api/line/login-callback`
-- **Webhook URL**: `https://your-ngrok-url.ngrok-free.app/api/line/webhook`
+- **Callback URL**: `http://localhost:3001/api/line/login-callback`
+- **Webhook URL**: `http://localhost:3001/api/line/webhook`
 
 ### **Production**
 - **Callback URL**: `https://your-backend-domain.railway.app/api/line/login-callback`
@@ -100,8 +99,8 @@ if (this.isProduction || this.isRailway) {
   // ใช้ Railway domain
   this.baseUrl = `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`;
 } else {
-  // ใช้ ngrok
-  this.baseUrl = process.env.NGROK_URL;
+  // ใช้ localhost
+  this.baseUrl = 'http://localhost:3001';
 }
 ```
 
@@ -109,7 +108,7 @@ if (this.isProduction || this.isRailway) {
 
 ### **Local Development**
 - [ ] `.env` file ถูกต้อง
-- [ ] ngrok ทำงาน
+- [ ] Server ทำงาน
 - [ ] Database เชื่อมต่อได้
 - [ ] LINE configuration ถูกต้อง
 - [ ] Frontend เชื่อมต่อ Backend ได้

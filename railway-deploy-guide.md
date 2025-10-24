@@ -3,7 +3,7 @@
 ## 🎯 รองรับทั้ง Local Development และ Production
 
 ระบบนี้ได้รับการออกแบบให้ทำงานได้ทั้ง:
-- **Local Development** (ใช้ ngrok สำหรับ LINE)
+- **Local Development** (ใช้ localhost)
 - **Production** (ใช้ Railway domain)
 
 ## 📋 ไฟล์ที่ต้องแก้ไขสำหรับ Railway
@@ -38,15 +38,15 @@ LINE_MESSAGING_ACCESS_TOKEN=your_line_messaging_access_token
 # Frontend URL (Railway domain)
 FRONTEND_URL=https://your-frontend-domain.railway.app
 
-# ngrok URL for LINE Webhook/Callback (Railway domain)
-NGROK_URL=https://your-backend-domain.railway.app
+# Railway domain for LINE Webhook/Callback
+RAILWAY_PUBLIC_DOMAIN=your-backend-domain.railway.app
 ```
 
 ### 2. **การทำงานในแต่ละ Environment**
 
 #### **Local Development**
 ```bash
-# ใช้ ngrok สำหรับ LINE integration
+# ใช้ localhost สำหรับ development
 npm run dev:local
 # หรือ
 NODE_ENV=development npm start
@@ -73,11 +73,11 @@ npm start
 
 #### C. **อัปเดต LINE Configuration**
 1. เปลี่ยน Callback URL ใน LINE Developers Console:
-   - จาก: `https://83b3aa05f505.ngrok-free.app/api/line/login-callback`
+   - จาก: `http://localhost:3001/api/line/login-callback`
    - เป็น: `https://your-backend-domain.railway.app/api/line/login-callback`
 
 2. เปลี่ยน Webhook URL ใน LINE Developers Console:
-   - จาก: `https://83b3aa05f505.ngrok-free.app/api/line/webhook`
+   - จาก: `http://localhost:3001/api/line/webhook`
    - เป็น: `https://your-backend-domain.railway.app/api/line/webhook`
 
 #### D. **อัปเดต Frontend**
@@ -118,7 +118,7 @@ echo $DATABASE_URL
 - ตรวจสอบ `allowedOrigins` ใน server.js
 
 #### LINE Webhook Issues
-- ตรวจสอบ `NGROK_URL` ใน Environment Variables
+- ตรวจสอบ `RAILWAY_PUBLIC_DOMAIN` ใน Environment Variables
 - ตรวจสอบ Webhook URL ใน LINE Developers Console
 
 ### 7. **Production Checklist**

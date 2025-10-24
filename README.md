@@ -96,7 +96,7 @@ DB_NAME=railway
 DB_PORT=3306
 PORT=3001
 FRONTEND_URL=http://localhost:5173
-NGROK_URL=https://your-ngrok-url.ngrok-free.app
+RAILWAY_PUBLIC_DOMAIN=your-backend-domain.railway.app
 ```
 
 ### Production (Railway)
@@ -128,7 +128,7 @@ LINE_MESSAGING_ACCESS_TOKEN=your_access_token
 ```
 
 ### 3. ตั้งค่า Callback URLs
-- **Local**: `https://your-ngrok-url.ngrok-free.app/api/line/login-callback`
+- **Local**: `http://localhost:3001/api/line/login-callback`
 - **Production**: `https://your-backend-domain.railway.app/api/line/login-callback`
 
 ## 🚀 Deployment
