@@ -382,23 +382,32 @@ app.post("/register", authLimiter, async (req, res) => {
     while (!emailSent && retryCount < maxRetries) {
       try {
         console.log(`📧 Attempting to send email (attempt ${retryCount + 1}/${maxRetries}) to ${email}`);
-        // 🛡️ Create new transporter for each attempt (using SendGrid)
+        // 🛡️ Create new transporter for each attempt (using SendGrid with multiple ports)
+        const ports = [587, 465, 2525]; // Try different ports
+        const currentPort = ports[retryCount] || 587;
+        
+        console.log(`📧 Using SendGrid port: ${currentPort}`);
+        
         const tempTransporter = nodemailer.createTransport({
           host: 'smtp.sendgrid.net',
-          port: 587,
-          secure: false, // true for 465, false for other ports
+          port: currentPort,
+          secure: currentPort === 465, // 465 is secure, others are not
           auth: {
             user: 'apikey', // SendGrid requires 'apikey' as username
             pass: process.env.SENDGRID_API_KEY, // Your SendGrid API key
           },
-          connectionTimeout: 30000, // 30 seconds (SendGrid is faster)
-          greetingTimeout: 15000,   // 15 seconds
-          socketTimeout: 30000,     // 30 seconds
+          connectionTimeout: 60000, // 60 seconds (increase for Railway)
+          greetingTimeout: 30000,   // 30 seconds
+          socketTimeout: 60000,     // 60 seconds
           pool: false,
           tls: {
-            rejectUnauthorized: false
+            rejectUnauthorized: false,
+            ciphers: 'SSLv3'
           },
-          debug: process.env.NODE_ENV === 'development'
+          debug: process.env.NODE_ENV === 'development',
+          // Additional settings for Railway
+          ignoreTLS: false,
+          requireTLS: true
         });
 
         await tempTransporter.sendMail({
@@ -467,14 +476,78 @@ app.post("/register", authLimiter, async (req, res) => {
           console.log(`⏳ Waiting ${delay/1000}s before retry ${retryCount + 1}/${maxRetries}`);
           await new Promise(resolve => setTimeout(resolve, delay));
         } else {
-          // 🛡️ If email fails, still allow registration but log the OTP
-          console.log(`⚠️ Email failed for user ${email}, OTP: ${otp}`);
-          console.log(`📧 SendGrid Configuration: smtp.sendgrid.net:587`);
-          console.log(`📧 SendGrid API Key: ${process.env.SENDGRID_API_KEY ? 'Configured' : 'Not configured'}`);
-          console.log(`📧 From Email: ${process.env.EMAIL_USER}`);
-          // Don't throw error, just continue
-          emailSent = false;
-          break;
+          // 🛡️ Try SendGrid Web API as fallback
+          console.log(`⚠️ SMTP failed, trying SendGrid Web API...`);
+          try {
+            const sgMail = await import('@sendgrid/mail');
+            sgMail.default.setApiKey(process.env.SENDGRID_API_KEY);
+            
+            const msg = {
+              to: email,
+              from: process.env.EMAIL_USER,
+              subject: "รหัสยืนยันตัวตน - ระบบจองรถรับ-ส่งโรงพยาบาล",
+              text: `เรียนท่านผู้ใช้งาน\n\nรหัสยืนยันตัวตน (OTP) ของท่านคือ: ${otp}\n\nรหัสนี้ใช้ได้ 15 นาที นับจากเวลาที่ส่ง\n\nหากท่านไม่ได้สมัครสมาชิก กรุณาเพิกเฉยต่ออีเมล์นี้\n\nด้วยความเคารพ\nทีมพัฒนาระบบจองรถรับ-ส่งโรงพยาบาล`,
+              html: `
+                <div style="font-family: 'Sarabun', Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #ffffff; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden;">
+                  <!-- Header -->
+                  <div style="background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); padding: 30px; text-align: center;">
+                    <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 600;">ระบบจองรถรับ-ส่งโรงพยาบาล</h1>
+                    <p style="color: #e0e7ff; margin: 8px 0 0 0; font-size: 16px;">Hospital Shuttle Booking System</p>
+                  </div>
+                  
+                  <!-- Content -->
+                  <div style="padding: 40px 30px;">
+                    <h2 style="color: #1f2937; margin: 0 0 20px 0; font-size: 20px; font-weight: 600;">รหัสยืนยันตัวตน (OTP)</h2>
+                    
+                    <p style="color: #374151; font-size: 16px; line-height: 1.6; margin: 0 0 25px 0;">
+                      เรียนท่านผู้ใช้งาน<br><br>
+                      ขอขอบคุณที่สมัครสมาชิกกับระบบจองรถรับ-ส่งโรงพยาบาลของเรา
+                    </p>
+                    
+                    <div style="background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%); border: 2px solid #d1d5db; border-radius: 12px; padding: 30px; text-align: center; margin: 25px 0;">
+                      <p style="color: #6b7280; font-size: 14px; margin: 0 0 10px 0; font-weight: 500;">รหัสยืนยันตัวตน</p>
+                      <div style="font-size: 32px; font-weight: 700; color: #1f2937; letter-spacing: 8px; margin: 10px 0;">${otp}</div>
+                      <p style="color: #6b7280; font-size: 12px; margin: 10px 0 0 0;">ใช้ได้ 15 นาที</p>
+                    </div>
+                    
+                    <div style="background-color: #fef3c7; border-left: 4px solid #f59e0b; padding: 15px; margin: 25px 0; border-radius: 4px;">
+                      <p style="color: #92400e; font-size: 14px; margin: 0; font-weight: 500;">
+                        ⚠️ <strong>คำเตือน:</strong> กรุณาไม่เปิดเผยรหัสนี้ให้ผู้อื่นทราบ
+                      </p>
+                    </div>
+                    
+                    <p style="color: #6b7280; font-size: 14px; line-height: 1.5; margin: 25px 0 0 0;">
+                      หากท่านไม่ได้สมัครสมาชิกกับระบบของเรา กรุณาเพิกเฉยต่ออีเมล์นี้<br>
+                      หากมีข้อสงสัย กรุณาติดต่อทีมสนับสนุนของเรา
+                    </p>
+                  </div>
+                  
+                  <!-- Footer -->
+                  <div style="background-color: #f9fafb; padding: 20px 30px; border-top: 1px solid #e5e7eb; text-align: center;">
+                    <p style="color: #6b7280; font-size: 12px; margin: 0;">
+                      ด้วยความเคารพ<br>
+                      <strong>ทีมพัฒนาระบบจองรถรับ-ส่งโรงพยาบาล</strong><br>
+                      Hospital Shuttle Booking System
+                    </p>
+                  </div>
+                </div>
+              `
+            };
+            
+            await sgMail.default.send(msg);
+            console.log(`✅ Email sent via SendGrid Web API to ${email}`);
+            emailSent = true;
+            break;
+          } catch (webApiError) {
+            console.log(`⚠️ SendGrid Web API also failed:`, webApiError.message);
+            console.log(`⚠️ Email failed for user ${email}, OTP: ${otp}`);
+            console.log(`📧 SendGrid Configuration: smtp.sendgrid.net:587`);
+            console.log(`📧 SendGrid API Key: ${process.env.SENDGRID_API_KEY ? 'Configured' : 'Not configured'}`);
+            console.log(`📧 From Email: ${process.env.EMAIL_USER}`);
+            // Don't throw error, just continue
+            emailSent = false;
+            break;
+          }
         }
       }
     }
