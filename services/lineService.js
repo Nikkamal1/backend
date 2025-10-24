@@ -210,9 +210,20 @@ class LineService {
       switch (notificationType) {
         case 'appointment_approved':
           message = `✅ การจองของคุณได้รับการอนุมัติแล้ว!\n\n` +
+                    `👤 ชื่อผู้ป่วย: ${appointment.first_name} ${appointment.last_name}\n` +
                     `📅 วันที่: ${new Date(appointment.appointment_date).toLocaleDateString('th-TH')}\n` +
                     `🕐 เวลา: ${appointment.appointment_time}\n` +
-                    `🏥 โรงพยาบาล: ${appointment.hospital}`;
+                    `🏥 โรงพยาบาล: ${appointment.hospital}`; +
+                    `🗺️ พิกัด: ${appointment.latitude}, ${appointment.longitude}`;
+
+                    const mapUrl = this.generateMapUrl(appointment.latitude, appointment.longitude, appointment.hospital);
+                    const mapImageUrl = this.generateMapImageUrl(appointment.latitude, appointment.longitude, appointment.hospital);
+                    
+                    message += `\n🗺️ ดูแผนที่: ${mapUrl}`;
+                    message += `\n![แผนที่](${mapImageUrl})`;
+
+                    
+                    
           break;
         case 'appointment_rejected':
           message = `❌ การจองของคุณถูกปฏิเสธ\n\n` +
