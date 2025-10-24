@@ -382,11 +382,12 @@ app.post("/register", authLimiter, async (req, res) => {
     while (!emailSent && retryCount < maxRetries) {
       try {
         console.log(`📧 Attempting to send email (attempt ${retryCount + 1}/${maxRetries}) to ${email}`);
-        // 🛡️ Create new transporter for each attempt (using SendGrid with multiple ports)
-        const ports = [587, 465, 2525]; // Try different ports
+        // 🛡️ Create new transporter for each attempt (using SendGrid with recommended ports)
+        const ports = [587, 25, 465]; // SendGrid recommended ports: 587, 25, 465
         const currentPort = ports[retryCount] || 587;
         
         console.log(`📧 Using SendGrid port: ${currentPort}`);
+        console.log(`📧 SendGrid API Key: ${process.env.SENDGRID_API_KEY ? 'Configured' : 'Not configured'}`);
         
         const tempTransporter = nodemailer.createTransport({
           host: 'smtp.sendgrid.net',
