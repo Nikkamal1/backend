@@ -1208,12 +1208,24 @@ app.get("/admin/statistics", async (req, res) => {
 // =================== System Health Check =================== //
 // Basic health check (for Railway deployment)
 app.get("/health", (req, res) => {
-  res.json({
-    success: true,
-    status: "healthy",
-    timestamp: new Date().toISOString(),
-    message: "Server is running"
-  });
+  try {
+    res.status(200).json({
+      success: true,
+      status: "healthy",
+      timestamp: new Date().toISOString(),
+      message: "Server is running",
+      environment: process.env.NODE_ENV || 'development',
+      port: process.env.PORT || 3001
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      status: "error",
+      timestamp: new Date().toISOString(),
+      message: "Health check failed",
+      error: err.message
+    });
+  }
 });
 
 // Detailed health check (for monitoring)
@@ -1470,8 +1482,36 @@ app.get("/admin/reports/pdf", async (req, res) => {
 const PORT = process.env.PORT || 3001;
 const HOST = process.env.HOST || '0.0.0.0';
 
-app.listen(PORT, HOST, () => {
+const server = app.listen(PORT, HOST, () => {
   console.log(`🚀 Server running on ${HOST}:${PORT}`);
   console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`📊 Frontend URL: ${process.env.FRONTEND_URL || 'http://localhost:5173'}`);
+  console.log(`🔗 Health Check: http://${HOST}:${PORT}/health`);
+  console.log(`📧 Email Config: ${process.env.EMAIL_HOST ? 'Configured' : 'Not configured'}`);
+  console.log(`🗄️ Database: ${process.env.DB_HOST ? 'Configured' : 'Not configured'}`);
+});
+
+// Handle server errors
+server.on('error', (err) => {
+  console.error('❌ Server error:', err);
+  if (err.code === 'EADDRINUSE') {
+    console.error(`Port ${PORT} is already in use`);
+  }
+});
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+  console.log('🛑 SIGTERM received, shutting down gracefully');
+  server.close(() => {
+    console.log('✅ Server closed');
+    process.exit(0);
+  });
+});
+
+process.on('SIGINT', () => {
+  console.log('🛑 SIGINT received, shutting down gracefully');
+  server.close(() => {
+    console.log('✅ Server closed');
+    process.exit(0);
+  });
 });
