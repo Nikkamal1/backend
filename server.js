@@ -351,10 +351,11 @@ app.post("/register", authLimiter, async (req, res) => {
       return res.status(400).json({ success: false, message: "อีเมล์นี้มีผู้ใช้งานแล้ว" });
     }
 
-    // ตรวจสอบว่ามี OTP ที่ยังไม่หมดอายุอยู่หรือไม่
+    // ตรวจสอบว่ามี OTP ที่ยังไม่หมดอายุอยู่หรือไม่ (10 นาที)
+    const tenMinutesAgo = new Date(Date.now()  1000);
     const [[existingOTP]] = await connection.query(
-      `SELECT * FROM email_otps WHERE email = ? AND type = 'register' AND is_used = 0 AND expires_at > NOW()`,
-      [email]
+      `SELECT * FROM email_otps WHERE email = ? AND type = 'register' AND is_used = 0 AND created_at > ?`,
+      [email, tenMinutesAgo]
     );
     if (existingOTP) {
       await connection.end();
@@ -384,22 +385,22 @@ app.post("/register", authLimiter, async (req, res) => {
     
     while (!emailSent && retryCount < maxRetries) {
       try {
-        // 🛡️ Create new transporter for each attempt (avoid connection pooling issues)
+        // 🛡️ Create new transporter for each attempt (optimized for Gmail)
         const tempTransporter = nodemailer.createTransport({
-          host: process.env.EMAIL_HOST,
-          port: process.env.EMAIL_PORT,
-          secure: false,
+          service: 'gmail', // ใช้ Gmail service แทน host/port
           auth: {
             user: process.env.EMAIL_USER,
             pass: process.env.EMAIL_PASS,
           },
-          connectionTimeout: 10000, // 10 seconds
-          greetingTimeout: 5000,    // 5 seconds
-          socketTimeout: 10000,     // 10 seconds
+          connectionTimeout: 30000, // 30 seconds
+          greetingTimeout: 15000,   // 15 seconds
+          socketTimeout: 30000,     // 30 seconds
           pool: false,
           tls: {
-            rejectUnauthorized: false
-          }
+            rejectUnauthorized: false,
+            ciphers: 'SSLv3'
+          },
+          debug: process.env.NODE_ENV === 'development'
         });
 
         await tempTransporter.sendMail({
@@ -467,6 +468,8 @@ app.post("/register", authLimiter, async (req, res) => {
         } else {
           // 🛡️ If email fails, still allow registration but log the OTP
           console.log(`⚠️ Email failed for user ${email}, OTP: ${otp}`);
+          console.log(`📧 SMTP Configuration: ${process.env.EMAIL_HOST}:${process.env.EMAIL_PORT}`);
+          console.log(`📧 Email User: ${process.env.EMAIL_USER}`);
           // Don't throw error, just continue
           emailSent = false;
           break;
