@@ -15,6 +15,9 @@ import lineService from "./services/lineService.js";
 dotenv.config();
 const app = express();
 
+// 🛡️ Trust proxy for Railway/Cloudflare (required for rate limiting)
+app.set('trust proxy', 1);
+
 // 🛡️ Security Headers
 app.use(helmet({
   contentSecurityPolicy: {
