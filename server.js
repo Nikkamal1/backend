@@ -354,40 +354,86 @@ app.post("/register", authLimiter, async (req, res) => {
       [email, otp, expiresAt, JSON.stringify({ name, email, password: hashedPassword })]
     );
 
-    // 🛡️ Send email using EmailJS (no recipient restrictions)
+    // 🛡️ Send email using Resend with domain verification
     let emailSent = false;
     
     try {
-      console.log(`📧 Sending email via EmailJS to ${email}`);
-      console.log(`📧 EmailJS Service ID: ${process.env.EMAILJS_SERVICE_ID ? 'Configured' : 'Not configured'}`);
+      console.log(`📧 Sending email via Resend to ${email}`);
+      console.log(`📧 Resend API Key: ${process.env.RESEND_API_KEY ? 'Configured' : 'Not configured'}`);
+      console.log(`📧 Resend Domain: ${process.env.RESEND_DOMAIN || 'Not configured'}`);
       
-      const emailjs = await import('@emailjs/nodejs');
+      const { Resend } = await import('resend');
+      const resend = new Resend(process.env.RESEND_API_KEY);
       
-      const templateParams = {
-        to_email: email,
-        to_name: name,
-        otp_code: otp,
-        hospital_name: "ระบบจองรถรับ-ส่งโรงพยาบาล"
-      };
+      // ใช้ domain ที่ verify แล้ว หรือ fallback ไป onboarding@resend.dev
+      const fromAddress = process.env.RESEND_DOMAIN 
+        ? `"ระบบจองรถรับ-ส่งโรงพยาบาล" <noreply@${process.env.RESEND_DOMAIN}>`
+        : "onboarding@resend.dev";
       
-      const result = await emailjs.send(
-        process.env.EMAILJS_SERVICE_ID,
-        process.env.EMAILJS_TEMPLATE_ID,
-        templateParams,
-        {
-          publicKey: process.env.EMAILJS_PUBLIC_KEY,
-        }
-      );
+      const { data, error } = await resend.emails.send({
+        from: fromAddress,
+        to: [email],
+        subject: "รหัสยืนยันตัวตน - ระบบจองรถรับ-ส่งโรงพยาบาล",
+        html: `
+          <div style="font-family: 'Sarabun', Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #ffffff; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden;">
+            <!-- Header -->
+            <div style="background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); padding: 30px; text-align: center;">
+              <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 600;">ระบบจองรถรับ-ส่งโรงพยาบาล</h1>
+              <p style="color: #e0e7ff; margin: 8px 0 0 0; font-size: 16px;">Hospital Shuttle Booking System</p>
+            </div>
+            
+            <!-- Content -->
+            <div style="padding: 40px 30px;">
+              <h2 style="color: #1f2937; margin: 0 0 20px 0; font-size: 20px; font-weight: 600;">รหัสยืนยันตัวตน (OTP)</h2>
+              
+              <p style="color: #374151; font-size: 16px; line-height: 1.6; margin: 0 0 25px 0;">
+                เรียนท่านผู้ใช้งาน<br><br>
+                ขอขอบคุณที่สมัครสมาชิกกับระบบจองรถรับ-ส่งโรงพยาบาลของเรา
+              </p>
+              
+              <div style="background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%); border: 2px solid #d1d5db; border-radius: 12px; padding: 30px; text-align: center; margin: 25px 0;">
+                <p style="color: #6b7280; font-size: 14px; margin: 0 0 10px 0; font-weight: 500;">รหัสยืนยันตัวตน</p>
+                <div style="font-size: 32px; font-weight: 700; color: #1f2937; letter-spacing: 8px; margin: 10px 0;">${otp}</div>
+                <p style="color: #6b7280; font-size: 12px; margin: 10px 0 0 0;">ใช้ได้ 15 นาที</p>
+              </div>
+              
+              <div style="background-color: #fef3c7; border-left: 4px solid #f59e0b; padding: 15px; margin: 25px 0; border-radius: 4px;">
+                <p style="color: #92400e; font-size: 14px; margin: 0; font-weight: 500;">
+                  ⚠️ <strong>คำเตือน:</strong> กรุณาไม่เปิดเผยรหัสนี้ให้ผู้อื่นทราบ
+                </p>
+              </div>
+              
+              <p style="color: #6b7280; font-size: 14px; line-height: 1.5; margin: 25px 0 0 0;">
+                หากท่านไม่ได้สมัครสมาชิกกับระบบของเรา กรุณาเพิกเฉยต่ออีเมล์นี้<br>
+                หากมีข้อสงสัย กรุณาติดต่อทีมสนับสนุนของเรา
+              </p>
+            </div>
+            
+            <!-- Footer -->
+            <div style="background-color: #f9fafb; padding: 20px 30px; border-top: 1px solid #e5e7eb; text-align: center;">
+              <p style="color: #6b7280; font-size: 12px; margin: 0;">
+                ด้วยความเคารพ<br>
+                <strong>ทีมพัฒนาระบบจองรถรับ-ส่งโรงพยาบาล</strong><br>
+                Hospital Shuttle Booking System
+              </p>
+            </div>
+          </div>
+        `
+      });
       
-      console.log(`✅ Email sent successfully via EmailJS to ${email}`);
-      console.log(`📧 EmailJS Response:`, result);
-      emailSent = true;
-    } catch (emailjsError) {
-      console.error(`❌ EmailJS failed:`, emailjsError.message);
+      if (error) {
+        console.error(`❌ Resend error:`, error);
+        emailSent = false;
+      } else {
+        console.log(`✅ Email sent successfully via Resend to ${email}`);
+        console.log(`📧 Email ID: ${data?.id}`);
+        emailSent = true;
+      }
+    } catch (resendError) {
+      console.error(`❌ Resend failed:`, resendError.message);
       console.log(`⚠️ Email failed for user ${email}, OTP: ${otp}`);
-      console.log(`📧 EmailJS Service ID: ${process.env.EMAILJS_SERVICE_ID ? 'Configured' : 'Not configured'}`);
-      console.log(`📧 EmailJS Template ID: ${process.env.EMAILJS_TEMPLATE_ID ? 'Configured' : 'Not configured'}`);
-      console.log(`📧 EmailJS Public Key: ${process.env.EMAILJS_PUBLIC_KEY ? 'Configured' : 'Not configured'}`);
+      console.log(`📧 Resend API Key: ${process.env.RESEND_API_KEY ? 'Configured' : 'Not configured'}`);
+      console.log(`📧 Resend Domain: ${process.env.RESEND_DOMAIN || 'Not configured'}`);
       emailSent = false;
     }
 
@@ -1148,7 +1194,7 @@ app.get("/health/detailed", async (req, res) => {
       services: {
         database: "connected",
         api: "running",
-        email: process.env.EMAILJS_SERVICE_ID ? "emailjs_configured" : "not_configured"
+        email: process.env.RESEND_API_KEY ? "resend_configured" : "not_configured"
       }
     });
   } catch (err) {
@@ -1166,11 +1212,11 @@ app.get("/health/detailed", async (req, res) => {
 app.get("/health/email", async (req, res) => {
   try {
     // Simple health check - just verify API key is configured
-    if (!process.env.EMAILJS_SERVICE_ID) {
+    if (!process.env.RESEND_API_KEY) {
       return res.json({
         success: false,
         status: "not_configured",
-        message: "EmailJS Service ID not configured"
+        message: "Resend API key not configured"
       });
     }
     
@@ -1178,8 +1224,9 @@ app.get("/health/email", async (req, res) => {
     res.json({
       success: true,
       status: "configured",
-      message: "EmailJS is configured",
-      serviceId: process.env.EMAILJS_SERVICE_ID ? "present" : "missing"
+      message: "Resend is configured",
+      apiKey: process.env.RESEND_API_KEY ? "present" : "missing",
+      domain: process.env.RESEND_DOMAIN || "not_configured"
     });
   } catch (err) {
     console.error("Email health check error:", err);
@@ -1390,7 +1437,7 @@ const server = app.listen(PORT, HOST, () => {
   console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`📊 Frontend URL: ${process.env.FRONTEND_URL || 'http://localhost:5173'}`);
   console.log(`🔗 Health Check: http://${HOST}:${PORT}/health`);
-  console.log(`📧 Email Config: ${process.env.EMAILJS_SERVICE_ID ? 'EmailJS Configured' : 'Not configured'}`);
+  console.log(`📧 Email Config: ${process.env.RESEND_API_KEY ? 'Resend Configured' : 'Not configured'}`);
   console.log(`🗄️ Database: ${process.env.DB_HOST ? 'Configured' : 'Not configured'}`);
   console.log(`✅ Server ready for health checks`);
 });
