@@ -13,7 +13,11 @@ export async function getConnection() {
       database: process.env.DB_NAME,
       port: process.env.DB_PORT,
       charset: 'utf8mb4',
-      timezone: '+07:00'
+      timezone: '+07:00',
+      // Add timeout settings for Railway
+      connectTimeout: 10000, // 10 seconds
+      acquireTimeout: 10000, // 10 seconds
+      timeout: 10000 // 10 seconds
     });
     
     
