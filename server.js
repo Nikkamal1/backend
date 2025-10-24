@@ -368,7 +368,7 @@ app.post("/register", authLimiter, async (req, res) => {
 
     // เก็บข้อมูลผู้ใช้ไว้ใน email_otps table (ใช้ email เป็น key)
     await connection.query(
-      `INSERT INTO email_otps (user_id, email, otp, type, expires_at, user_data) VALUES (NULL, ?, ?, 'register', ?, ?)`,
+      `INSERT INTO email_otps (email, otp, type, expires_at, user_data) VALUES (?, ?, 'register', ?, ?)`,
       [email, otp, expiresAt, JSON.stringify({ name, email, password: hashedPassword })]
     );
 
