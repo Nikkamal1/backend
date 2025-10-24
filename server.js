@@ -134,11 +134,25 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 const transporter = nodemailer.createTransport({
   host: process.env.EMAIL_HOST,
   port: process.env.EMAIL_PORT,
-  secure: false,
+  secure: false, // true for 465, false for other ports
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
   },
+  // 🛡️ Connection timeout settings
+  connectionTimeout: 60000, // 60 seconds
+  greetingTimeout: 30000,   // 30 seconds
+  socketTimeout: 60000,     // 60 seconds
+  // 🛡️ Retry settings
+  pool: true,
+  maxConnections: 5,
+  maxMessages: 100,
+  rateDelta: 20000, // 20 seconds
+  rateLimit: 5, // max 5 messages per rateDelta
+  // 🛡️ TLS settings for Gmail
+  tls: {
+    rejectUnauthorized: false
+  }
 });
 
 // ==================== Users ====================
@@ -349,18 +363,58 @@ app.post("/register", authLimiter, async (req, res) => {
       [result.insertId, otp, expiresAt]
     );
 
-    await transporter.sendMail({
-      from: `"Shuttle System" <${process.env.EMAIL_USER}>`,
-      to: email,
-      subject: "OTP ยืนยันอีเมล์",
-      text: `รหัส OTP ของคุณคือ ${otp} (ใช้ได้ 10 นาที)`,
-    });
+    // 🛡️ Send email with retry mechanism
+    let emailSent = false;
+    let retryCount = 0;
+    const maxRetries = 3;
+    
+    while (!emailSent && retryCount < maxRetries) {
+      try {
+        await transporter.sendMail({
+          from: `"Shuttle System" <${process.env.EMAIL_USER}>`,
+          to: email,
+          subject: "OTP ยืนยันอีเมล์",
+          text: `รหัส OTP ของคุณคือ ${otp} (ใช้ได้ 10 นาที)`,
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+              <h2 style="color: #333;">ยืนยันอีเมล์ - ระบบจองรถรับ-ส่ง</h2>
+              <p>รหัส OTP ของคุณคือ:</p>
+              <div style="background-color: #f0f0f0; padding: 20px; text-align: center; font-size: 24px; font-weight: bold; color: #007bff; margin: 20px 0;">
+                ${otp}
+              </div>
+              <p><strong>หมายเหตุ:</strong> รหัสนี้ใช้ได้ 10 นาที</p>
+              <p style="color: #666; font-size: 12px;">หากคุณไม่ได้สมัครสมาชิก กรุณาเพิกเฉยต่ออีเมล์นี้</p>
+            </div>
+          `
+        });
+        emailSent = true;
+      } catch (emailError) {
+        retryCount++;
+        console.error(`Email send attempt ${retryCount} failed:`, emailError.message);
+        
+        if (retryCount < maxRetries) {
+          // Wait before retry (exponential backoff)
+          await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
+        } else {
+          throw emailError;
+        }
+      }
+    }
 
     await connection.end();
     res.json({ success: true, message: "ส่ง OTP ไปยังอีเมล์เรียบร้อย" });
   } catch (err) {
     console.error("Register error:", err);
-    res.status(500).json({ success: false, message: err.message });
+    
+    // 🛡️ Check if it's an email sending error
+    if (err.code === 'ETIMEDOUT' || err.code === 'ECONNREFUSED' || err.message.includes('timeout')) {
+      res.status(500).json({ 
+        success: false, 
+        message: "ไม่สามารถส่ง OTP ได้ในขณะนี้ กรุณาลองใหม่อีกครั้งในภายหลัง" 
+      });
+    } else {
+      res.status(500).json({ success: false, message: err.message });
+    }
   }
 });
 
@@ -1038,6 +1092,17 @@ app.get("/health", async (req, res) => {
     const [result] = await connection.query("SELECT 1 as health_check");
     await connection.end();
     
+    // ตรวจสอบการเชื่อมต่อ SMTP
+    let emailStatus = "not_configured";
+    if (process.env.EMAIL_HOST) {
+      try {
+        await transporter.verify();
+        emailStatus = "connected";
+      } catch (emailError) {
+        emailStatus = `error: ${emailError.message}`;
+      }
+    }
+    
     res.json({
       success: true,
       status: "healthy",
@@ -1045,7 +1110,7 @@ app.get("/health", async (req, res) => {
       services: {
         database: "connected",
         api: "running",
-        email: process.env.EMAIL_HOST ? "configured" : "not_configured"
+        email: emailStatus
       }
     });
   } catch (err) {
