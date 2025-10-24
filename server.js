@@ -436,6 +436,19 @@ app.put("/profile/:id", async (req, res) => {
       
       await connection.end();
       res.json({ success: true, message: "อัปเดตรหัสผ่านสำเร็จ" });
+    } else if (type === 'admin_password') {
+      // อัปเดตรหัสผ่านโดยแอดมิน (ไม่ต้องใส่รหัสผ่านปัจจุบัน)
+      if (!newPassword) {
+        await connection.end();
+        return res.status(400).json({ success: false, message: "กรุณาระบุรหัสผ่านใหม่" });
+      }
+
+      // เข้ารหัสรหัสผ่านใหม่
+      const hashedPassword = await bcrypt.hash(newPassword, 10);
+      await connection.query("UPDATE users SET password=? WHERE id=?", [hashedPassword, id]);
+      
+      await connection.end();
+      res.json({ success: true, message: "อัปเดตรหัสผ่านสำเร็จ" });
     } else if (type === 'delete') {
       // ลบบัญชี (soft delete)
       await connection.query("UPDATE users SET is_active=0 WHERE id=?", [id]);

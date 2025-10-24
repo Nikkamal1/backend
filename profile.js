@@ -50,3 +50,23 @@ export async function changePassword(userId, currentPassword, newPassword, confi
     await connection.end();
   }
 }
+
+// เปลี่ยนรหัสผ่านโดยแอดมิน (ไม่ต้องใส่รหัสผ่านปัจจุบัน)
+export async function adminChangePassword(userId, newPassword) {
+  const connection = await getConnection();
+
+  try {
+    const [[user]] = await connection.query(`SELECT * FROM users WHERE id = ?`, [userId]);
+    if (!user) return { success: false, message: "ไม่พบผู้ใช้งาน" };
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    await connection.query(`UPDATE users SET password = ? WHERE id = ?`, [hashedPassword, userId]);
+
+    return { success: true, message: "เปลี่ยนรหัสผ่านสำเร็จ" };
+  } catch (err) {
+    console.error(err);
+    return { success: false, message: err.message };
+  } finally {
+    await connection.end();
+  }
+}
