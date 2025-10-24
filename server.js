@@ -354,25 +354,38 @@ app.post("/register", authLimiter, async (req, res) => {
       [email, otp, expiresAt, JSON.stringify({ name, email, password: hashedPassword })]
     );
 
-    // 🛡️ Send email using Resend with domain verification
+    // 🛡️ Send email using Nodemailer + Gmail SMTP (no recipient restrictions)
     let emailSent = false;
     
     try {
-      console.log(`📧 Sending email via Resend to ${email}`);
-      console.log(`📧 Resend API Key: ${process.env.RESEND_API_KEY ? 'Configured' : 'Not configured'}`);
-      console.log(`📧 Resend Domain: ${process.env.RESEND_DOMAIN || 'Not configured'}`);
+      console.log(`📧 Sending email via Gmail SMTP to ${email}`);
+      console.log(`📧 Gmail User: ${process.env.EMAIL_USER ? 'Configured' : 'Not configured'}`);
       
-      const { Resend } = await import('resend');
-      const resend = new Resend(process.env.RESEND_API_KEY);
+      const nodemailer = await import('nodemailer');
       
-      // ใช้ domain ที่ verify แล้ว หรือ fallback ไป onboarding@resend.dev
-      const fromAddress = process.env.RESEND_DOMAIN 
-        ? `"ระบบจองรถรับ-ส่งโรงพยาบาล" <noreply@${process.env.RESEND_DOMAIN}>`
-        : "onboarding@resend.dev";
+      // Create transporter with Gmail SMTP
+      const transporter = nodemailer.createTransporter({
+        service: 'gmail',
+        auth: {
+          user: process.env.EMAIL_USER,
+          pass: process.env.EMAIL_PASS
+        },
+        // Optimized settings for Railway
+        connectionTimeout: 30000,
+        greetingTimeout: 15000,
+        socketTimeout: 30000,
+        pool: false,
+        tls: {
+          rejectUnauthorized: false,
+          ciphers: 'SSLv3',
+          requireTLS: true
+        }
+      });
       
-      const { data, error } = await resend.emails.send({
-        from: fromAddress,
-        to: [email],
+      // Send email
+      const info = await transporter.sendMail({
+        from: `"ระบบจองรถรับ-ส่งโรงพยาบาล" <${process.env.EMAIL_USER}>`,
+        to: email,
         subject: "รหัสยืนยันตัวตน - ระบบจองรถรับ-ส่งโรงพยาบาล",
         html: `
           <div style="font-family: 'Sarabun', Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #ffffff; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden;">
@@ -421,19 +434,14 @@ app.post("/register", authLimiter, async (req, res) => {
         `
       });
       
-      if (error) {
-        console.error(`❌ Resend error:`, error);
-        emailSent = false;
-      } else {
-        console.log(`✅ Email sent successfully via Resend to ${email}`);
-        console.log(`📧 Email ID: ${data?.id}`);
-        emailSent = true;
-      }
-    } catch (resendError) {
-      console.error(`❌ Resend failed:`, resendError.message);
+      console.log(`✅ Email sent successfully via Gmail SMTP to ${email}`);
+      console.log(`📧 Message ID: ${info.messageId}`);
+      emailSent = true;
+    } catch (gmailError) {
+      console.error(`❌ Gmail SMTP failed:`, gmailError.message);
       console.log(`⚠️ Email failed for user ${email}, OTP: ${otp}`);
-      console.log(`📧 Resend API Key: ${process.env.RESEND_API_KEY ? 'Configured' : 'Not configured'}`);
-      console.log(`📧 Resend Domain: ${process.env.RESEND_DOMAIN || 'Not configured'}`);
+      console.log(`📧 Gmail User: ${process.env.EMAIL_USER ? 'Configured' : 'Not configured'}`);
+      console.log(`📧 Gmail Pass: ${process.env.EMAIL_PASS ? 'Configured' : 'Not configured'}`);
       emailSent = false;
     }
 
@@ -1194,7 +1202,7 @@ app.get("/health/detailed", async (req, res) => {
       services: {
         database: "connected",
         api: "running",
-        email: process.env.RESEND_API_KEY ? "resend_configured" : "not_configured"
+        email: process.env.EMAIL_USER ? "gmail_smtp_configured" : "not_configured"
       }
     });
   } catch (err) {
@@ -1212,11 +1220,11 @@ app.get("/health/detailed", async (req, res) => {
 app.get("/health/email", async (req, res) => {
   try {
     // Simple health check - just verify API key is configured
-    if (!process.env.RESEND_API_KEY) {
+    if (!process.env.EMAIL_USER) {
       return res.json({
         success: false,
         status: "not_configured",
-        message: "Resend API key not configured"
+        message: "Gmail SMTP not configured"
       });
     }
     
@@ -1224,9 +1232,9 @@ app.get("/health/email", async (req, res) => {
     res.json({
       success: true,
       status: "configured",
-      message: "Resend is configured",
-      apiKey: process.env.RESEND_API_KEY ? "present" : "missing",
-      domain: process.env.RESEND_DOMAIN || "not_configured"
+      message: "Gmail SMTP is configured",
+      user: process.env.EMAIL_USER ? "present" : "missing",
+      pass: process.env.EMAIL_PASS ? "present" : "missing"
     });
   } catch (err) {
     console.error("Email health check error:", err);
@@ -1437,7 +1445,7 @@ const server = app.listen(PORT, HOST, () => {
   console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`📊 Frontend URL: ${process.env.FRONTEND_URL || 'http://localhost:5173'}`);
   console.log(`🔗 Health Check: http://${HOST}:${PORT}/health`);
-  console.log(`📧 Email Config: ${process.env.RESEND_API_KEY ? 'Resend Configured' : 'Not configured'}`);
+  console.log(`📧 Email Config: ${process.env.EMAIL_USER ? 'Gmail SMTP Configured' : 'Not configured'}`);
   console.log(`🗄️ Database: ${process.env.DB_HOST ? 'Configured' : 'Not configured'}`);
   console.log(`✅ Server ready for health checks`);
 });
