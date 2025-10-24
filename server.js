@@ -1084,24 +1084,25 @@ app.get("/admin/statistics", async (req, res) => {
 });
 
 // =================== System Health Check =================== //
-app.get("/health", async (req, res) => {
+// Basic health check (for Railway deployment)
+app.get("/health", (req, res) => {
+  res.json({
+    success: true,
+    status: "healthy",
+    timestamp: new Date().toISOString(),
+    message: "Server is running"
+  });
+});
+
+// Detailed health check (for monitoring)
+app.get("/health/detailed", async (req, res) => {
   try {
+    // 🛡️ Quick health check - only check database connection
     const connection = await getConnection();
     
-    // ตรวจสอบการเชื่อมต่อฐานข้อมูล
+    // ตรวจสอบการเชื่อมต่อฐานข้อมูล (timeout 5 วินาที)
     const [result] = await connection.query("SELECT 1 as health_check");
     await connection.end();
-    
-    // ตรวจสอบการเชื่อมต่อ SMTP
-    let emailStatus = "not_configured";
-    if (process.env.EMAIL_HOST) {
-      try {
-        await transporter.verify();
-        emailStatus = "connected";
-      } catch (emailError) {
-        emailStatus = `error: ${emailError.message}`;
-      }
-    }
     
     res.json({
       success: true,
@@ -1110,7 +1111,7 @@ app.get("/health", async (req, res) => {
       services: {
         database: "connected",
         api: "running",
-        email: emailStatus
+        email: process.env.EMAIL_HOST ? "configured" : "not_configured"
       }
     });
   } catch (err) {
@@ -1124,6 +1125,34 @@ app.get("/health", async (req, res) => {
   }
 });
 
+// =================== Email Health Check =================== //
+app.get("/health/email", async (req, res) => {
+  try {
+    if (!process.env.EMAIL_HOST) {
+      return res.json({
+        success: false,
+        status: "not_configured",
+        message: "Email not configured"
+      });
+    }
+
+    // ตรวจสอบการเชื่อมต่อ SMTP (timeout 10 วินาที)
+    await transporter.verify();
+    
+    res.json({
+      success: true,
+      status: "connected",
+      message: "SMTP connection successful"
+    });
+  } catch (err) {
+    console.error("Email health check error:", err);
+    res.status(500).json({
+      success: false,
+      status: "error",
+      message: err.message
+    });
+  }
+});
 
 // =================== PDF Report Generation =================== //
 app.get("/admin/reports/pdf", async (req, res) => {
