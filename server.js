@@ -368,7 +368,7 @@ app.post("/register", authLimiter, async (req, res) => {
 
     // สร้าง OTP และเก็บข้อมูลไว้ใน email_otps (ยังไม่สร้าง user)
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 นาที
     const hashedPassword = await bcrypt.hash(password, 10);
 
     // เก็บข้อมูลผู้ใช้ไว้ใน email_otps table (ใช้ email เป็น key)
@@ -403,19 +403,53 @@ app.post("/register", authLimiter, async (req, res) => {
         });
 
         await tempTransporter.sendMail({
-          from: `"Shuttle System" <${process.env.EMAIL_USER}>`,
+          from: `"ระบบจองรถรับ-ส่งโรงพยาบาล" <${process.env.EMAIL_USER}>`,
           to: email,
-          subject: "OTP ยืนยันอีเมล์",
-          text: `รหัส OTP ของคุณคือ ${otp} (ใช้ได้ 10 นาที)`,
+          subject: "รหัสยืนยันตัวตน - ระบบจองรถรับ-ส่งโรงพยาบาล",
+          text: `เรียนท่านผู้ใช้งาน\n\nรหัสยืนยันตัวตน (OTP) ของท่านคือ: ${otp}\n\nรหัสนี้ใช้ได้ 15 นาที นับจากเวลาที่ส่ง\n\nหากท่านไม่ได้สมัครสมาชิก กรุณาเพิกเฉยต่ออีเมล์นี้\n\nด้วยความเคารพ\nทีมพัฒนาระบบจองรถรับ-ส่งโรงพยาบาล`,
           html: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-              <h2 style="color: #333;">ยืนยันอีเมล์ - ระบบจองรถรับ-ส่ง</h2>
-              <p>รหัส OTP ของคุณคือ:</p>
-              <div style="background-color: #f0f0f0; padding: 20px; text-align: center; font-size: 24px; font-weight: bold; color: #007bff; margin: 20px 0;">
-                ${otp}
+            <div style="font-family: 'Sarabun', Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #ffffff; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden;">
+              <!-- Header -->
+              <div style="background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); padding: 30px; text-align: center;">
+                <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 600;">ระบบจองรถรับ-ส่งโรงพยาบาล</h1>
+                <p style="color: #e0e7ff; margin: 8px 0 0 0; font-size: 16px;">Hospital Shuttle Booking System</p>
               </div>
-              <p><strong>หมายเหตุ:</strong> รหัสนี้ใช้ได้ 10 นาที</p>
-              <p style="color: #666; font-size: 12px;">หากคุณไม่ได้สมัครสมาชิก กรุณาเพิกเฉยต่ออีเมล์นี้</p>
+              
+              <!-- Content -->
+              <div style="padding: 40px 30px;">
+                <h2 style="color: #1f2937; margin: 0 0 20px 0; font-size: 20px; font-weight: 600;">รหัสยืนยันตัวตน (OTP)</h2>
+                
+                <p style="color: #374151; font-size: 16px; line-height: 1.6; margin: 0 0 25px 0;">
+                  เรียนท่านผู้ใช้งาน<br><br>
+                  ขอขอบคุณที่สมัครสมาชิกกับระบบจองรถรับ-ส่งโรงพยาบาลของเรา
+                </p>
+                
+                <div style="background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%); border: 2px solid #d1d5db; border-radius: 12px; padding: 30px; text-align: center; margin: 25px 0;">
+                  <p style="color: #6b7280; font-size: 14px; margin: 0 0 10px 0; font-weight: 500;">รหัสยืนยันตัวตน</p>
+                  <div style="font-size: 32px; font-weight: 700; color: #1f2937; letter-spacing: 8px; margin: 10px 0;">${otp}</div>
+                  <p style="color: #6b7280; font-size: 12px; margin: 10px 0 0 0;">ใช้ได้ 15 นาที</p>
+                </div>
+                
+                <div style="background-color: #fef3c7; border-left: 4px solid #f59e0b; padding: 15px; margin: 25px 0; border-radius: 4px;">
+                  <p style="color: #92400e; font-size: 14px; margin: 0; font-weight: 500;">
+                    ⚠️ <strong>คำเตือน:</strong> กรุณาไม่เปิดเผยรหัสนี้ให้ผู้อื่นทราบ
+                  </p>
+                </div>
+                
+                <p style="color: #6b7280; font-size: 14px; line-height: 1.5; margin: 25px 0 0 0;">
+                  หากท่านไม่ได้สมัครสมาชิกกับระบบของเรา กรุณาเพิกเฉยต่ออีเมล์นี้<br>
+                  หากมีข้อสงสัย กรุณาติดต่อทีมสนับสนุนของเรา
+                </p>
+              </div>
+              
+              <!-- Footer -->
+              <div style="background-color: #f9fafb; padding: 20px 30px; border-top: 1px solid #e5e7eb; text-align: center;">
+                <p style="color: #6b7280; font-size: 12px; margin: 0;">
+                  ด้วยความเคารพ<br>
+                  <strong>ทีมพัฒนาระบบจองรถรับ-ส่งโรงพยาบาล</strong><br>
+                  Hospital Shuttle Booking System
+                </p>
+              </div>
             </div>
           `
         });
@@ -475,6 +509,22 @@ app.post("/register", authLimiter, async (req, res) => {
     }
   }
 });
+
+// ==================== Cleanup Expired OTPs ====================
+async function cleanupExpiredOTPs() {
+  try {
+    const connection = await getConnection();
+    await connection.query(
+      `DELETE FROM email_otps WHERE expires_at < NOW() AND is_used = 0`
+    );
+    await connection.end();
+  } catch (err) {
+    console.error("Error cleaning up expired OTPs:", err);
+  }
+}
+
+// รัน cleanup ทุก 5 นาที
+setInterval(cleanupExpiredOTPs, 5 * 60 * 1000);
 
 // ==================== Verify OTP ====================
 app.post("/verify-otp", async (req, res) => {
