@@ -174,9 +174,10 @@ router.get('/status/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
     
-    const connection = await lineService.getLineConnection(userId);
+    const connections = await lineService.getLineConnections(userId);
     
-    if (connection) {
+    if (connections && connections.length > 0) {
+      const connection = connections[0]; // ใช้การเชื่อมต่อแรก
       res.json({
         success: true,
         connected: true,
@@ -227,15 +228,16 @@ router.post('/test-message/:userId', async (req, res) => {
     const { userId } = req.params;
     const { message } = req.body;
     
-    const connection = await lineService.getLineConnection(userId);
+    const connections = await lineService.getLineConnections(userId);
     
-    if (!connection) {
+    if (!connections || connections.length === 0) {
       return res.status(400).json({
         success: false,
         message: 'ผู้ใช้ยังไม่ได้เชื่อมต่อ LINE'
       });
     }
     
+    const connection = connections[0]; // ใช้การเชื่อมต่อแรก
     await lineService.sendMessage(connection.line_user_id, message || 'ข้อความทดสอบจากระบบจองรถรับ-ส่งโรงพยาบาล');
     
     res.json({

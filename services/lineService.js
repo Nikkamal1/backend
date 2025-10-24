@@ -136,6 +136,12 @@ class LineService {
     }
   }
 
+  // ✅ ดึงข้อมูลการเชื่อมต่อ LINE ของ user (การเชื่อมต่อแรก)
+  async getLineConnection(userId) {
+    const connections = await this.getLineConnections(userId);
+    return connections && connections.length > 0 ? connections[0] : null;
+  }
+
   // ✅ ยกเลิกการเชื่อมต่อ (บาง LINE หรือทั้งหมด)
   async disconnectLine(userId, lineUserId = null) {
     const connection = await getConnection();
