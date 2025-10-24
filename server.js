@@ -354,40 +354,28 @@ app.post("/register", authLimiter, async (req, res) => {
       [email, otp, expiresAt, JSON.stringify({ name, email, password: hashedPassword })]
     );
 
-    // 🛡️ Send email using Nodemailer + Gmail SMTP (no recipient restrictions)
+    // 🛡️ Send email using Brevo API (Railway-friendly, no recipient restrictions)
     let emailSent = false;
     
     try {
-      console.log(`📧 Sending email via Gmail SMTP to ${email}`);
-      console.log(`📧 Gmail User: ${process.env.EMAIL_USER ? 'Configured' : 'Not configured'}`);
+      console.log(`📧 Sending email via Brevo API to ${email}`);
+      console.log(`📧 Brevo API Key: ${process.env.BREVO_API_KEY ? 'Configured' : 'Not configured'}`);
       
-      const nodemailer = await import('nodemailer');
+      const axios = await import('axios');
       
-      // Create transporter with Gmail SMTP
-      const transporter = nodemailer.createTransporter({
-        service: 'gmail',
-        auth: {
-          user: process.env.EMAIL_USER,
-          pass: process.env.EMAIL_PASS
+      const emailData = {
+        sender: {
+          name: "ระบบจองรถรับ-ส่งโรงพยาบาล",
+          email: "noreply@brevo.com"
         },
-        // Optimized settings for Railway
-        connectionTimeout: 30000,
-        greetingTimeout: 15000,
-        socketTimeout: 30000,
-        pool: false,
-        tls: {
-          rejectUnauthorized: false,
-          ciphers: 'SSLv3',
-          requireTLS: true
-        }
-      });
-      
-      // Send email
-      const info = await transporter.sendMail({
-        from: `"ระบบจองรถรับ-ส่งโรงพยาบาล" <${process.env.EMAIL_USER}>`,
-        to: email,
+        to: [
+          {
+            email: email,
+            name: name
+          }
+        ],
         subject: "รหัสยืนยันตัวตน - ระบบจองรถรับ-ส่งโรงพยาบาล",
-        html: `
+        htmlContent: `
           <div style="font-family: 'Sarabun', Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #ffffff; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden;">
             <!-- Header -->
             <div style="background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); padding: 30px; text-align: center;">
@@ -432,16 +420,31 @@ app.post("/register", authLimiter, async (req, res) => {
             </div>
           </div>
         `
-      });
+      };
       
-      console.log(`✅ Email sent successfully via Gmail SMTP to ${email}`);
-      console.log(`📧 Message ID: ${info.messageId}`);
+      const response = await axios.default.post(
+        'https://api.brevo.com/v3/sendEmail',
+        emailData,
+        {
+          headers: {
+            'accept': 'application/json',
+            'api-key': process.env.BREVO_API_KEY,
+            'content-type': 'application/json'
+          },
+          timeout: 30000
+        }
+      );
+      
+      console.log(`✅ Email sent successfully via Brevo API to ${email}`);
+      console.log(`📧 Brevo Response:`, response.data);
       emailSent = true;
-    } catch (gmailError) {
-      console.error(`❌ Gmail SMTP failed:`, gmailError.message);
+    } catch (brevoError) {
+      console.error(`❌ Brevo API failed:`, brevoError.message);
       console.log(`⚠️ Email failed for user ${email}, OTP: ${otp}`);
-      console.log(`📧 Gmail User: ${process.env.EMAIL_USER ? 'Configured' : 'Not configured'}`);
-      console.log(`📧 Gmail Pass: ${process.env.EMAIL_PASS ? 'Configured' : 'Not configured'}`);
+      console.log(`📧 Brevo API Key: ${process.env.BREVO_API_KEY ? 'Configured' : 'Not configured'}`);
+      if (brevoError.response) {
+        console.log(`📧 Brevo Error Response:`, brevoError.response.data);
+      }
       emailSent = false;
     }
 
@@ -1202,7 +1205,7 @@ app.get("/health/detailed", async (req, res) => {
       services: {
         database: "connected",
         api: "running",
-        email: process.env.EMAIL_USER ? "gmail_smtp_configured" : "not_configured"
+        email: process.env.BREVO_API_KEY ? "brevo_configured" : "not_configured"
       }
     });
   } catch (err) {
@@ -1220,11 +1223,11 @@ app.get("/health/detailed", async (req, res) => {
 app.get("/health/email", async (req, res) => {
   try {
     // Simple health check - just verify API key is configured
-    if (!process.env.EMAIL_USER) {
+    if (!process.env.BREVO_API_KEY) {
       return res.json({
         success: false,
         status: "not_configured",
-        message: "Gmail SMTP not configured"
+        message: "Brevo API key not configured"
       });
     }
     
@@ -1232,9 +1235,8 @@ app.get("/health/email", async (req, res) => {
     res.json({
       success: true,
       status: "configured",
-      message: "Gmail SMTP is configured",
-      user: process.env.EMAIL_USER ? "present" : "missing",
-      pass: process.env.EMAIL_PASS ? "present" : "missing"
+      message: "Brevo API is configured",
+      apiKey: process.env.BREVO_API_KEY ? "present" : "missing"
     });
   } catch (err) {
     console.error("Email health check error:", err);
@@ -1445,7 +1447,7 @@ const server = app.listen(PORT, HOST, () => {
   console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`📊 Frontend URL: ${process.env.FRONTEND_URL || 'http://localhost:5173'}`);
   console.log(`🔗 Health Check: http://${HOST}:${PORT}/health`);
-  console.log(`📧 Email Config: ${process.env.EMAIL_USER ? 'Gmail SMTP Configured' : 'Not configured'}`);
+  console.log(`📧 Email Config: ${process.env.BREVO_API_KEY ? 'Brevo API Configured' : 'Not configured'}`);
   console.log(`🗄️ Database: ${process.env.DB_HOST ? 'Configured' : 'Not configured'}`);
   console.log(`✅ Server ready for health checks`);
 });
