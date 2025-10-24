@@ -139,20 +139,21 @@ const transporter = nodemailer.createTransport({
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
   },
-  // 🛡️ Connection timeout settings
-  connectionTimeout: 60000, // 60 seconds
-  greetingTimeout: 30000,   // 30 seconds
-  socketTimeout: 60000,     // 60 seconds
-  // 🛡️ Retry settings
-  pool: true,
-  maxConnections: 5,
-  maxMessages: 100,
-  rateDelta: 20000, // 20 seconds
-  rateLimit: 5, // max 5 messages per rateDelta
+  // 🛡️ Connection timeout settings (shorter for Railway)
+  connectionTimeout: 15000, // 15 seconds
+  greetingTimeout: 10000,   // 10 seconds
+  socketTimeout: 15000,     // 15 seconds
+  // 🛡️ Disable pooling for Railway
+  pool: false,
   // 🛡️ TLS settings for Gmail
   tls: {
-    rejectUnauthorized: false
-  }
+    rejectUnauthorized: false,
+    ciphers: 'SSLv3'
+  },
+  // 🛡️ Additional settings for Railway
+  ignoreTLS: false,
+  requireTLS: true,
+  debug: process.env.NODE_ENV === 'development'
 });
 
 // ==================== Users ====================
@@ -366,11 +367,29 @@ app.post("/register", authLimiter, async (req, res) => {
     // 🛡️ Send email with retry mechanism
     let emailSent = false;
     let retryCount = 0;
-    const maxRetries = 3;
+    const maxRetries = 2; // ลดจำนวน retry สำหรับ Railway
     
     while (!emailSent && retryCount < maxRetries) {
       try {
-        await transporter.sendMail({
+        // 🛡️ Create new transporter for each attempt (avoid connection pooling issues)
+        const tempTransporter = nodemailer.createTransport({
+          host: process.env.EMAIL_HOST,
+          port: process.env.EMAIL_PORT,
+          secure: false,
+          auth: {
+            user: process.env.EMAIL_USER,
+            pass: process.env.EMAIL_PASS,
+          },
+          connectionTimeout: 10000, // 10 seconds
+          greetingTimeout: 5000,    // 5 seconds
+          socketTimeout: 10000,     // 10 seconds
+          pool: false,
+          tls: {
+            rejectUnauthorized: false
+          }
+        });
+
+        await tempTransporter.sendMail({
           from: `"Shuttle System" <${process.env.EMAIL_USER}>`,
           to: email,
           subject: "OTP ยืนยันอีเมล์",
@@ -387,22 +406,39 @@ app.post("/register", authLimiter, async (req, res) => {
             </div>
           `
         });
+        
+        // Close the temporary transporter
+        tempTransporter.close();
         emailSent = true;
       } catch (emailError) {
         retryCount++;
         console.error(`Email send attempt ${retryCount} failed:`, emailError.message);
         
         if (retryCount < maxRetries) {
-          // Wait before retry (exponential backoff)
-          await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
+          // Wait before retry
+          await new Promise(resolve => setTimeout(resolve, 2000));
         } else {
-          throw emailError;
+          // 🛡️ If email fails, still allow registration but log the OTP
+          console.log(`⚠️ Email failed for user ${email}, OTP: ${otp}`);
+          // Don't throw error, just continue
+          break;
         }
       }
     }
 
     await connection.end();
-    res.json({ success: true, message: "ส่ง OTP ไปยังอีเมล์เรียบร้อย" });
+    
+    // 🛡️ Return different messages based on email status
+    if (emailSent) {
+      res.json({ success: true, message: "ส่ง OTP ไปยังอีเมล์เรียบร้อย" });
+    } else {
+      res.json({ 
+        success: true, 
+        message: "สมัครสมาชิกสำเร็จ แต่ไม่สามารถส่ง OTP ได้ กรุณาติดต่อผู้ดูแลระบบ",
+        otp: otp, // Include OTP in response for debugging
+        emailSent: false
+      });
+    }
   } catch (err) {
     console.error("Register error:", err);
     
