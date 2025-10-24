@@ -189,7 +189,6 @@ class LineService {
     try {
       const lineConnections = await this.getLineConnections(userId);
       if (lineConnections.length === 0) {
-        console.log(`User ${userId} has no LINE connections`);
         return false;
       }
 

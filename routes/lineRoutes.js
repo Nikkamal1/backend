@@ -372,7 +372,6 @@ router.post('/webhook', async (req, res) => {
             if (event.source && event.source.userId) {
               // Debug log (remove in production)
               if (process.env.NODE_ENV === 'development') {
-                console.log(`📝 Received message from ${event.source.userId}: ${event.message.text}`);
               }
               
               // ตอบกลับข้อความอัตโนมัติ
