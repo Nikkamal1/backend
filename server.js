@@ -344,24 +344,32 @@ app.post("/register", authLimiter, async (req, res) => {
     const { name, email, password } = req.body;
     const connection = await getConnection();
 
+    // ตรวจสอบว่าอีเมลซ้ำหรือไม่
     const [[existing]] = await connection.query(`SELECT * FROM users WHERE email = ?`, [email]);
     if (existing) {
       await connection.end();
       return res.status(400).json({ success: false, message: "อีเมล์นี้มีผู้ใช้งานแล้ว" });
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
-    const [result] = await connection.query(
-      `INSERT INTO users (name, email, password, role_id, is_active) VALUES (?, ?, ?, 1, 0)`,
-      [name, email, hashedPassword]
+    // ตรวจสอบว่ามี OTP ที่ยังไม่หมดอายุอยู่หรือไม่
+    const [[existingOTP]] = await connection.query(
+      `SELECT * FROM email_otps WHERE email = ? AND type = 'register' AND is_used = 0 AND expires_at > NOW()`,
+      [email]
     );
+    if (existingOTP) {
+      await connection.end();
+      return res.status(400).json({ success: false, message: "กรุณารอสักครู่ก่อนขอ OTP ใหม่" });
+    }
 
+    // สร้าง OTP และเก็บข้อมูลไว้ใน email_otps (ยังไม่สร้าง user)
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+    const hashedPassword = await bcrypt.hash(password, 10);
 
+    // เก็บข้อมูลผู้ใช้ไว้ใน email_otps table (ใช้ email เป็น key)
     await connection.query(
-      `INSERT INTO email_otps (user_id, otp, type, expires_at) VALUES (?, ?, 'register', ?)`,
-      [result.insertId, otp, expiresAt]
+      `INSERT INTO email_otps (email, otp, type, expires_at, user_data) VALUES (?, ?, 'register', ?, ?)`,
+      [email, otp, expiresAt, JSON.stringify({ name, email, password: hashedPassword })]
     );
 
     // 🛡️ Send email with retry mechanism
@@ -460,15 +468,10 @@ app.post("/verify-otp", async (req, res) => {
     const { email, otpInput } = req.body;
     const connection = await getConnection();
 
-    const [[user]] = await connection.query(`SELECT * FROM users WHERE email = ?`, [email]);
-    if (!user) {
-      await connection.end();
-      return res.status(400).json({ success: false, message: "ไม่พบผู้ใช้งาน" });
-    }
-
+    // ตรวจสอบ OTP ที่เก็บไว้ใน email_otps
     const [[otpRow]] = await connection.query(
-      `SELECT * FROM email_otps WHERE user_id = ? AND otp = ? AND type='register' AND is_used=0 AND expires_at>NOW()`,
-      [user.id, otpInput]
+      `SELECT * FROM email_otps WHERE email = ? AND otp = ? AND type='register' AND is_used=0 AND expires_at>NOW()`,
+      [email, otpInput]
     );
 
     if (!otpRow) {
@@ -476,11 +479,27 @@ app.post("/verify-otp", async (req, res) => {
       return res.status(400).json({ success: false, message: "OTP ไม่ถูกต้องหรือหมดอายุ" });
     }
 
-    await connection.query(`UPDATE users SET is_active=1 WHERE id=?`, [user.id]);
+    // ตรวจสอบว่าผู้ใช้มีอยู่แล้วหรือไม่ (ป้องกันการสร้างซ้ำ)
+    const [[existingUser]] = await connection.query(`SELECT * FROM users WHERE email = ?`, [email]);
+    if (existingUser) {
+      await connection.end();
+      return res.status(400).json({ success: false, message: "อีเมล์นี้มีผู้ใช้งานแล้ว" });
+    }
+
+    // แปลงข้อมูลผู้ใช้จาก JSON
+    const userData = JSON.parse(otpRow.user_data);
+    
+    // สร้างผู้ใช้ใหม่ในฐานข้อมูล
+    const [result] = await connection.query(
+      `INSERT INTO users (name, email, password, role_id, is_active) VALUES (?, ?, ?, 1, 1)`,
+      [userData.name, userData.email, userData.password]
+    );
+
+    // อัปเดต OTP เป็น used
     await connection.query(`UPDATE email_otps SET is_used=1 WHERE id=?`, [otpRow.id]);
 
     await connection.end();
-    res.json({ success: true, message: "ยืนยัน OTP สำเร็จ" });
+    res.json({ success: true, message: "ยืนยัน OTP สำเร็จ สมัครสมาชิกเรียบร้อยแล้ว" });
   } catch (err) {
     console.error("Verify OTP error:", err);
     res.status(500).json({ success: false, message: err.message });
