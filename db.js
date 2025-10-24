@@ -14,10 +14,8 @@ export async function getConnection() {
       port: process.env.DB_PORT,
       charset: 'utf8mb4',
       timezone: '+07:00',
-      // Add timeout settings for Railway
-      connectTimeout: 10000, // 10 seconds
-      acquireTimeout: 10000, // 10 seconds
-      timeout: 10000 // 10 seconds
+      // Add timeout settings for Railway (correct MySQL2 options)
+      connectTimeout: 10000 // 10 seconds
     });
     
     

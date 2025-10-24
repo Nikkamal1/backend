@@ -365,7 +365,7 @@ app.post("/register", authLimiter, async (req, res) => {
       const resend = new Resend(process.env.RESEND_API_KEY);
       
       const { data, error } = await resend.emails.send({
-        from: `"ระบบจองรถรับ-ส่งโรงพยาบาล" <${process.env.EMAIL_USER}>`,
+        from: "onboarding@resend.dev",
         to: [email],
         subject: "รหัสยืนยันตัวตน - ระบบจองรถรับ-ส่งโรงพยาบาล",
         html: `
