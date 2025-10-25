@@ -655,11 +655,11 @@ async function cleanupExpiredOTPs() {
   }
 }
 
-// รัน cleanup ทุก 2 นาที (บ่อยขึ้นเพื่อความปลอดภัย)
-setInterval(cleanupExpiredOTPs, 2 * 60 * 1000);
-
 // รัน cleanup ครั้งแรกเมื่อ server เริ่มต้น
 cleanupExpiredOTPs();
+
+// หมายเหตุ: OTP cleanup จะรันผ่าน Railway Cron Jobs แทน setInterval
+// เพื่อให้สามารถใช้ replication ได้
 
 // ==================== Manual OTP Cleanup Endpoint ====================
 app.post("/admin/cleanup-otps", async (req, res) => {
