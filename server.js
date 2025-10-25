@@ -1371,7 +1371,239 @@ app.get("/health/email", async (req, res) => {
   }
 });
 
-// =================== Test Email Sending =================== //
+// =================== Test Email Sending (GET for browser) =================== //
+app.get("/test/email", async (req, res) => {
+  try {
+    const { email = "nknikamal2545@gmail.com" } = req.query;
+    
+    console.log(`🧪 Testing email sending to ${email}`);
+    
+    // Setup OAuth2 client with refresh token
+    const oauth2Client = new google.auth.OAuth2(
+      process.env.GMAIL_CLIENT_ID,
+      process.env.GMAIL_CLIENT_SECRET,
+      process.env.GMAIL_REDIRECT_URI
+    );
+    
+    // Set refresh token
+    oauth2Client.setCredentials({
+      refresh_token: process.env.GMAIL_REFRESH_TOKEN
+    });
+    
+    // Debug OAuth configuration
+    console.log(`📧 OAuth Client ID: ${process.env.GMAIL_CLIENT_ID ? 'Present' : 'Missing'}`);
+    console.log(`📧 OAuth Client Secret: ${process.env.GMAIL_CLIENT_SECRET ? 'Present' : 'Missing'}`);
+    console.log(`📧 OAuth Redirect URI: ${process.env.GMAIL_REDIRECT_URI || 'Not set'}`);
+    console.log(`📧 Refresh Token: ${process.env.GMAIL_REFRESH_TOKEN ? 'Present' : 'Missing'}`);
+    
+    // Try to get access token first
+    try {
+      const { credentials } = await oauth2Client.refreshAccessToken();
+      console.log(`✅ Access token refreshed successfully`);
+      oauth2Client.setCredentials(credentials);
+    } catch (refreshError) {
+      console.error(`❌ Failed to refresh access token:`, refreshError.message);
+      return res.status(500).json({
+        success: false,
+        message: `Failed to refresh access token: ${refreshError.message}`,
+        error: refreshError.message
+      });
+    }
+    
+    // Create Gmail API instance
+    const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
+    
+    // Create test email message
+    const subject = "🧪 ทดสอบการส่งอีเมล - ระบบจองรถรับ-ส่งโรงพยาบาล";
+    const fromName = "ระบบจองรถรับ-ส่งโรงพยาบาล";
+    
+    // Encode subject and from name for UTF-8
+    const encodedSubject = `=?UTF-8?B?${Buffer.from(subject, 'utf8').toString('base64')}?=`;
+    const encodedFromName = `=?UTF-8?B?${Buffer.from(fromName, 'utf8').toString('base64')}?=`;
+    
+    const emailMessage = [
+      `From: ${encodedFromName} <${process.env.GMAIL_USER}>`,
+      `To: ${email}`,
+      `Subject: ${encodedSubject}`,
+      `MIME-Version: 1.0`,
+      `Content-Type: text/html; charset=UTF-8`,
+      `Content-Transfer-Encoding: base64`,
+      ``,
+      `<div style="font-family: 'Sarabun', Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #ffffff; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden;">`,
+      `  <!-- Header -->`,
+      `  <div style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); padding: 30px; text-align: center;">`,
+      `    <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 600;">🧪 ทดสอบการส่งอีเมล</h1>`,
+      `    <p style="color: #d1fae5; margin: 8px 0 0 0; font-size: 16px;">Email Test - Hospital Shuttle System</p>`,
+      `  </div>`,
+      `  `,
+      `  <!-- Content -->`,
+      `  <div style="padding: 40px 30px;">`,
+      `    <h2 style="color: #1f2937; margin: 0 0 20px 0; font-size: 20px; font-weight: 600;">✅ การทดสอบสำเร็จ!</h2>`,
+      `    `,
+      `    <p style="color: #374151; font-size: 16px; line-height: 1.6; margin: 0 0 25px 0;">`,
+      `      ระบบส่งอีเมลทำงานได้ปกติ<br><br>`,
+      `      เวลา: ${new Date().toLocaleString('th-TH')}<br>`,
+      `      ผู้ส่ง: ${process.env.GMAIL_USER}<br>`,
+      `      ผู้รับ: ${email}`,
+      `    </p>`,
+      `    `,
+      `    <div style="background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); border: 2px solid #0ea5e9; border-radius: 12px; padding: 30px; text-align: center; margin: 25px 0;">`,
+      `      <p style="color: #0369a1; font-size: 14px; margin: 0 0 10px 0; font-weight: 500;">🎉 สถานะระบบ</p>`,
+      `      <div style="font-size: 24px; font-weight: 700; color: #0c4a6e; margin: 10px 0;">ทำงานปกติ</div>`,
+      `      <p style="color: #0369a1; font-size: 12px; margin: 10px 0 0 0;">Gmail API + Refresh Token</p>`,
+      `    </div>`,
+      `    `,
+      `    <p style="color: #6b7280; font-size: 14px; line-height: 1.5; margin: 25px 0 0 0;">`,
+      `      หากคุณได้รับอีเมลนี้ แสดงว่าระบบส่งอีเมลทำงานได้ปกติ<br>`,
+      `      และสามารถส่ง OTP สำหรับการสมัครสมาชิกได้`,
+      `    </p>`,
+      `  </div>`,
+      `  `,
+      `  <!-- Footer -->`,
+      `  <div style="background-color: #f9fafb; padding: 20px 30px; border-top: 1px solid #e5e7eb; text-align: center;">`,
+      `    <p style="color: #6b7280; font-size: 12px; margin: 0;">`,
+      `      ระบบจองรถรับ-ส่งโรงพยาบาล<br>`,
+      `      Hospital Shuttle Booking System`,
+      `    </p>`,
+      `  </div>`,
+      `</div>`
+    ].join('\n');
+    
+    // Encode message in base64
+    const encodedMessage = Buffer.from(emailMessage).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    
+    // Send email using googleapis
+    const response = await gmail.users.messages.send({
+      userId: 'me',
+      requestBody: {
+        raw: encodedMessage
+      }
+    });
+    
+    console.log(`✅ Test email sent successfully to ${email}`);
+    console.log(`📧 Gmail Message ID: ${response.data.id}`);
+    
+    // Return HTML response for browser
+    res.send(`
+      <!DOCTYPE html>
+      <html lang="th">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>🧪 ทดสอบการส่งอีเมล</title>
+        <style>
+          body { font-family: 'Sarabun', Arial, sans-serif; margin: 0; padding: 20px; background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); min-height: 100vh; }
+          .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); overflow: hidden; }
+          .header { background: linear-gradient(135deg, #10b981 0%, #059669 100%); padding: 30px; text-align: center; color: white; }
+          .content { padding: 40px 30px; }
+          .success { background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); border: 2px solid #0ea5e9; border-radius: 12px; padding: 30px; text-align: center; margin: 25px 0; }
+          .info { background: #f9fafb; padding: 20px; border-radius: 8px; margin: 20px 0; }
+          .code { background: #1f2937; color: #f9fafb; padding: 15px; border-radius: 8px; font-family: monospace; margin: 10px 0; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>🧪 ทดสอบการส่งอีเมล</h1>
+            <p>Email Test - Hospital Shuttle System</p>
+          </div>
+          <div class="content">
+            <h2 style="color: #1f2937; margin: 0 0 20px 0;">✅ การทดสอบสำเร็จ!</h2>
+            <p>ระบบส่งอีเมลทำงานได้ปกติ</p>
+            
+            <div class="success">
+              <p style="color: #0369a1; font-size: 14px; margin: 0 0 10px 0; font-weight: 500;">🎉 สถานะระบบ</p>
+              <div style="font-size: 24px; font-weight: 700; color: #0c4a6e; margin: 10px 0;">ทำงานปกติ</div>
+              <p style="color: #0369a1; font-size: 12px; margin: 10px 0 0 0;">Gmail API + Refresh Token</p>
+            </div>
+            
+            <div class="info">
+              <h3>📧 ข้อมูลการส่ง</h3>
+              <p><strong>เวลา:</strong> ${new Date().toLocaleString('th-TH')}</p>
+              <p><strong>ผู้ส่ง:</strong> ${process.env.GMAIL_USER}</p>
+              <p><strong>ผู้รับ:</strong> ${email}</p>
+              <p><strong>Message ID:</strong> ${response.data.id}</p>
+            </div>
+            
+            <div class="info">
+              <h3>🔧 OAuth Configuration</h3>
+              <p><strong>Client ID:</strong> ${process.env.GMAIL_CLIENT_ID ? '✅ Configured' : '❌ Missing'}</p>
+              <p><strong>Client Secret:</strong> ${process.env.GMAIL_CLIENT_SECRET ? '✅ Configured' : '❌ Missing'}</p>
+              <p><strong>Redirect URI:</strong> ${process.env.GMAIL_REDIRECT_URI || 'Not set'}</p>
+              <p><strong>Refresh Token:</strong> ${process.env.GMAIL_REFRESH_TOKEN ? '✅ Configured' : '❌ Missing'}</p>
+            </div>
+            
+            <p style="color: #6b7280; font-size: 14px; line-height: 1.5; margin: 25px 0 0 0;">
+              หากคุณได้รับอีเมลนี้ แสดงว่าระบบส่งอีเมลทำงานได้ปกติ<br>
+              และสามารถส่ง OTP สำหรับการสมัครสมาชิกได้
+            </p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `);
+    
+  } catch (err) {
+    console.error(`❌ Test email failed:`, err.message);
+    
+    // Return HTML error response for browser
+    res.status(500).send(`
+      <!DOCTYPE html>
+      <html lang="th">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>❌ ทดสอบการส่งอีเมลล้มเหลว</title>
+        <style>
+          body { font-family: 'Sarabun', Arial, sans-serif; margin: 0; padding: 20px; background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%); min-height: 100vh; }
+          .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); overflow: hidden; }
+          .header { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); padding: 30px; text-align: center; color: white; }
+          .content { padding: 40px 30px; }
+          .error { background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%); border: 2px solid #ef4444; border-radius: 12px; padding: 30px; text-align: center; margin: 25px 0; }
+          .info { background: #f9fafb; padding: 20px; border-radius: 8px; margin: 20px 0; }
+          .code { background: #1f2937; color: #f9fafb; padding: 15px; border-radius: 8px; font-family: monospace; margin: 10px 0; word-break: break-all; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>❌ ทดสอบการส่งอีเมลล้มเหลว</h1>
+            <p>Email Test Failed - Hospital Shuttle System</p>
+          </div>
+          <div class="content">
+            <h2 style="color: #1f2937; margin: 0 0 20px 0;">❌ การทดสอบล้มเหลว</h2>
+            
+            <div class="error">
+              <p style="color: #dc2626; font-size: 14px; margin: 0 0 10px 0; font-weight: 500;">🚨 ข้อผิดพลาด</p>
+              <div style="font-size: 18px; font-weight: 700; color: #991b1b; margin: 10px 0;">${err.message}</div>
+            </div>
+            
+            <div class="info">
+              <h3>🔧 OAuth Configuration</h3>
+              <p><strong>Client ID:</strong> ${process.env.GMAIL_CLIENT_ID ? '✅ Configured' : '❌ Missing'}</p>
+              <p><strong>Client Secret:</strong> ${process.env.GMAIL_CLIENT_SECRET ? '✅ Configured' : '❌ Missing'}</p>
+              <p><strong>Redirect URI:</strong> ${process.env.GMAIL_REDIRECT_URI || 'Not set'}</p>
+              <p><strong>Refresh Token:</strong> ${process.env.GMAIL_REFRESH_TOKEN ? '✅ Configured' : '❌ Missing'}</p>
+            </div>
+            
+            <div class="info">
+              <h3>📋 Error Details</h3>
+              <div class="code">${err.message}</div>
+              ${err.response?.data ? `<div class="code">${JSON.stringify(err.response.data, null, 2)}</div>` : ''}
+            </div>
+            
+            <p style="color: #6b7280; font-size: 14px; line-height: 1.5; margin: 25px 0 0 0;">
+              กรุณาตรวจสอบ OAuth configuration และลองใหม่อีกครั้ง
+            </p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `);
+  }
+});
+
+// =================== Test Email Sending (POST) =================== //
 app.post("/test/email", async (req, res) => {
   try {
     const { email = "nknikamal2545@gmail.com" } = req.body;
