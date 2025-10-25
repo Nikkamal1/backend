@@ -1371,6 +1371,35 @@ app.get("/health/email", async (req, res) => {
   }
 });
 
+// =================== Debug OAuth Configuration =================== //
+app.get("/debug/oauth", (req, res) => {
+  const config = {
+    clientId: process.env.GMAIL_CLIENT_ID ? 'Present' : 'Missing',
+    clientSecret: process.env.GMAIL_CLIENT_SECRET ? 'Present' : 'Missing',
+    redirectUri: process.env.GMAIL_REDIRECT_URI || 'Not set',
+    refreshToken: process.env.GMAIL_REFRESH_TOKEN ? 'Present' : 'Missing',
+    user: process.env.GMAIL_USER || 'Not set'
+  };
+  
+  // Show partial values for debugging
+  if (process.env.GMAIL_CLIENT_ID) {
+    config.clientIdPartial = process.env.GMAIL_CLIENT_ID.substring(0, 20) + '...';
+  }
+  if (process.env.GMAIL_CLIENT_SECRET) {
+    config.clientSecretPartial = process.env.GMAIL_CLIENT_SECRET.substring(0, 10) + '...';
+  }
+  if (process.env.GMAIL_REFRESH_TOKEN) {
+    config.refreshTokenPartial = process.env.GMAIL_REFRESH_TOKEN.substring(0, 20) + '...';
+  }
+  
+  res.json({
+    success: true,
+    message: "OAuth Configuration Debug",
+    config: config,
+    timestamp: new Date().toISOString()
+  });
+});
+
 // =================== Test Email Sending (GET for browser) =================== //
 app.get("/test/email", async (req, res) => {
   try {
