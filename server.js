@@ -363,13 +363,21 @@ app.post("/register", authLimiter, async (req, res) => {
       
       const axios = await import('axios');
       
-      // Create email message in RFC 2822 format
+      // Create email message in RFC 2822 format with proper UTF-8 encoding
+      const subject = "รหัสยืนยันตัวตน - ระบบจองรถรับ-ส่งโรงพยาบาล";
+      const fromName = "ระบบจองรถรับ-ส่งโรงพยาบาล";
+      
+      // Encode subject and from name for UTF-8
+      const encodedSubject = `=?UTF-8?B?${Buffer.from(subject, 'utf8').toString('base64')}?=`;
+      const encodedFromName = `=?UTF-8?B?${Buffer.from(fromName, 'utf8').toString('base64')}?=`;
+      
       const emailMessage = [
-        `From: "ระบบจองรถรับ-ส่งโรงพยาบาล" <${process.env.GMAIL_USER}>`,
+        `From: ${encodedFromName} <${process.env.GMAIL_USER}>`,
         `To: ${email}`,
-        `Subject: รหัสยืนยันตัวตน - ระบบจองรถรับ-ส่งโรงพยาบาล`,
+        `Subject: ${encodedSubject}`,
         `MIME-Version: 1.0`,
         `Content-Type: text/html; charset=UTF-8`,
+        `Content-Transfer-Encoding: base64`,
         ``,
         `<div style="font-family: 'Sarabun', Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #ffffff; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden;">`,
         `  <!-- Header -->`,
