@@ -811,7 +811,7 @@ app.post("/verify-otp", async (req, res) => {
     await connection.query(`UPDATE email_otps SET is_used=1 WHERE id=?`, [otpRow.id]);
 
     await connection.end();
-    res.json({ success: true, message: "ยืนยัน OTP สำเร็จ สมัครสมาชิกเรียบร้อยแล้ว" });
+    res.json({ success: true, message: "✅ยืนยัน OTP สำเร็จ สมัครสมาชิกเรียบร้อยแล้ว" });
   } catch (err) {
     console.error("Verify OTP error:", err);
     res.status(500).json({ success: false, message: err.message });
