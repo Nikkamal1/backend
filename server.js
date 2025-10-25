@@ -73,8 +73,8 @@ const allowedOrigins = [
   "http://localhost:5174", 
   "http://localhost:5175",
   "http://localhost:5176",
-  "http://hospital-pnu.up.railway.app",
-  "https://frontend-production-a002.up.railway.app"
+  "https://hospital-pnu.up.railway.app",
+  // "https://frontend-production-a002.up.railway.app"
 ];
 
 // เพิ่ม Production domains
