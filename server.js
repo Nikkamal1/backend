@@ -354,49 +354,97 @@ app.post("/register", authLimiter, async (req, res) => {
       [email, otp, expiresAt, JSON.stringify({ name, email, password: hashedPassword })]
     );
 
-    // 🛡️ Send email using EmailJS (super easy, no signup needed)
+    // 🛡️ Send email using Gmail API (use your own Gmail to send to anyone)
     let emailSent = false;
     
     try {
-      console.log(`📧 Sending email via EmailJS to ${email}`);
-      console.log(`📧 EmailJS Service ID: ${process.env.EMAILJS_SERVICE_ID ? 'Configured' : 'Not configured'}`);
+      console.log(`📧 Sending email via Gmail API to ${email}`);
+      console.log(`📧 Gmail User: ${process.env.GMAIL_USER ? 'Configured' : 'Not configured'}`);
       
       const axios = await import('axios');
       
+      // Create email message in RFC 2822 format
+      const emailMessage = [
+        `From: "ระบบจองรถรับ-ส่งโรงพยาบาล" <${process.env.GMAIL_USER}>`,
+        `To: ${email}`,
+        `Subject: รหัสยืนยันตัวตน - ระบบจองรถรับ-ส่งโรงพยาบาล`,
+        `MIME-Version: 1.0`,
+        `Content-Type: text/html; charset=UTF-8`,
+        ``,
+        `<div style="font-family: 'Sarabun', Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #ffffff; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden;">`,
+        `  <!-- Header -->`,
+        `  <div style="background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); padding: 30px; text-align: center;">`,
+        `    <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 600;">ระบบจองรถรับ-ส่งโรงพยาบาล</h1>`,
+        `    <p style="color: #e0e7ff; margin: 8px 0 0 0; font-size: 16px;">Hospital Shuttle Booking System</p>`,
+        `  </div>`,
+        `  `,
+        `  <!-- Content -->`,
+        `  <div style="padding: 40px 30px;">`,
+        `    <h2 style="color: #1f2937; margin: 0 0 20px 0; font-size: 20px; font-weight: 600;">รหัสยืนยันตัวตน (OTP)</h2>`,
+        `    `,
+        `    <p style="color: #374151; font-size: 16px; line-height: 1.6; margin: 0 0 25px 0;">`,
+        `      เรียน ${name}<br><br>`,
+        `      ขอขอบคุณที่สมัครสมาชิกกับระบบจองรถรับ-ส่งโรงพยาบาลของเรา`,
+        `    </p>`,
+        `    `,
+        `    <div style="background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%); border: 2px solid #d1d5db; border-radius: 12px; padding: 30px; text-align: center; margin: 25px 0;">`,
+        `      <p style="color: #6b7280; font-size: 14px; margin: 0 0 10px 0; font-weight: 500;">รหัสยืนยันตัวตน</p>`,
+        `      <div style="font-size: 32px; font-weight: 700; color: #1f2937; letter-spacing: 8px; margin: 10px 0;">${otp}</div>`,
+        `      <p style="color: #6b7280; font-size: 12px; margin: 10px 0 0 0;">ใช้ได้ 15 นาที</p>`,
+        `    </div>`,
+        `    `,
+        `    <div style="background-color: #fef3c7; border-left: 4px solid #f59e0b; padding: 15px; margin: 25px 0; border-radius: 4px;">`,
+        `      <p style="color: #92400e; font-size: 14px; margin: 0; font-weight: 500;">`,
+        `        ⚠️ <strong>คำเตือน:</strong> กรุณาไม่เปิดเผยรหัสนี้ให้ผู้อื่นทราบ`,
+        `      </p>`,
+        `    </div>`,
+        `    `,
+        `    <p style="color: #6b7280; font-size: 14px; line-height: 1.5; margin: 25px 0 0 0;">`,
+        `      หากท่านไม่ได้สมัครสมาชิกกับระบบของเรา กรุณาเพิกเฉยต่ออีเมล์นี้<br>`,
+        `      หากมีข้อสงสัย กรุณาติดต่อทีมสนับสนุนของเรา`,
+        `    </p>`,
+        `  </div>`,
+        `  `,
+        `  <!-- Footer -->`,
+        `  <div style="background-color: #f9fafb; padding: 20px 30px; border-top: 1px solid #e5e7eb; text-align: center;">`,
+        `    <p style="color: #6b7280; font-size: 12px; margin: 0;">`,
+        `      ด้วยความเคารพ<br>`,
+        `      <strong>ทีมพัฒนาระบบจองรถรับ-ส่งโรงพยาบาล</strong><br>`,
+        `      Hospital Shuttle Booking System`,
+        `    </p>`,
+        `  </div>`,
+        `</div>`
+      ].join('\n');
+      
+      // Encode message in base64
+      const encodedMessage = Buffer.from(emailMessage).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+      
       const emailData = {
-        service_id: process.env.EMAILJS_SERVICE_ID,
-        template_id: process.env.EMAILJS_TEMPLATE_ID,
-        user_id: process.env.EMAILJS_PUBLIC_KEY,
-        template_params: {
-          to_email: email,
-          to_name: name,
-          otp_code: otp,
-          hospital_name: "ระบบจองรถรับ-ส่งโรงพยาบาล"
-        }
+        raw: encodedMessage
       };
       
       const response = await axios.default.post(
-        'https://api.emailjs.com/api/v1.0/email/send',
+        `https://gmail.googleapis.com/gmail/v1/users/${process.env.GMAIL_USER}/messages/send`,
         emailData,
         {
           headers: {
+            'Authorization': `Bearer ${process.env.GMAIL_ACCESS_TOKEN}`,
             'Content-Type': 'application/json'
           },
           timeout: 30000
         }
       );
       
-      console.log(`✅ Email sent successfully via EmailJS to ${email}`);
-      console.log(`📧 EmailJS Response:`, response.data);
+      console.log(`✅ Email sent successfully via Gmail API to ${email}`);
+      console.log(`📧 Gmail Message ID: ${response.data.id}`);
       emailSent = true;
-    } catch (emailjsError) {
-      console.error(`❌ EmailJS failed:`, emailjsError.message);
+    } catch (gmailError) {
+      console.error(`❌ Gmail API failed:`, gmailError.message);
       console.log(`⚠️ Email failed for user ${email}, OTP: ${otp}`);
-      console.log(`📧 EmailJS Service ID: ${process.env.EMAILJS_SERVICE_ID ? 'Configured' : 'Not configured'}`);
-      console.log(`📧 EmailJS Template ID: ${process.env.EMAILJS_TEMPLATE_ID ? 'Configured' : 'Not configured'}`);
-      console.log(`📧 EmailJS Public Key: ${process.env.EMAILJS_PUBLIC_KEY ? 'Configured' : 'Not configured'}`);
-      if (emailjsError.response) {
-        console.log(`📧 EmailJS Error Response:`, emailjsError.response.data);
+      console.log(`📧 Gmail User: ${process.env.GMAIL_USER ? 'Configured' : 'Not configured'}`);
+      console.log(`📧 Gmail Access Token: ${process.env.GMAIL_ACCESS_TOKEN ? 'Configured' : 'Not configured'}`);
+      if (gmailError.response) {
+        console.log(`📧 Gmail Error Response:`, gmailError.response.data);
       }
       emailSent = false;
     }
@@ -1158,7 +1206,7 @@ app.get("/health/detailed", async (req, res) => {
       services: {
         database: "connected",
         api: "running",
-        email: process.env.EMAILJS_SERVICE_ID ? "emailjs_configured" : "not_configured"
+        email: process.env.GMAIL_USER ? "gmail_api_configured" : "not_configured"
       }
     });
   } catch (err) {
@@ -1176,11 +1224,11 @@ app.get("/health/detailed", async (req, res) => {
 app.get("/health/email", async (req, res) => {
   try {
     // Simple health check - just verify API key is configured
-    if (!process.env.EMAILJS_SERVICE_ID) {
+    if (!process.env.GMAIL_USER) {
       return res.json({
         success: false,
         status: "not_configured",
-        message: "EmailJS not configured"
+        message: "Gmail API not configured"
       });
     }
     
@@ -1188,8 +1236,9 @@ app.get("/health/email", async (req, res) => {
     res.json({
       success: true,
       status: "configured",
-      message: "EmailJS is configured",
-      serviceId: process.env.EMAILJS_SERVICE_ID ? "present" : "missing"
+      message: "Gmail API is configured",
+      user: process.env.GMAIL_USER ? "present" : "missing",
+      token: process.env.GMAIL_ACCESS_TOKEN ? "present" : "missing"
     });
   } catch (err) {
     console.error("Email health check error:", err);
@@ -1400,7 +1449,7 @@ const server = app.listen(PORT, HOST, () => {
   console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`📊 Frontend URL: ${process.env.FRONTEND_URL || 'http://localhost:5173'}`);
   console.log(`🔗 Health Check: http://${HOST}:${PORT}/health`);
-  console.log(`📧 Email Config: ${process.env.EMAILJS_SERVICE_ID ? 'EmailJS Configured' : 'Not configured'}`);
+  console.log(`📧 Email Config: ${process.env.GMAIL_USER ? 'Gmail API Configured' : 'Not configured'}`);
   console.log(`🗄️ Database: ${process.env.DB_HOST ? 'Configured' : 'Not configured'}`);
   console.log(`✅ Server ready for health checks`);
 });
