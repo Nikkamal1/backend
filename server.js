@@ -10,7 +10,6 @@ import { jsPDF } from "jspdf";
 import 'jspdf-autotable';
 import lineRoutes from "./routes/lineRoutes.js";
 import lineService from "./services/lineService.js";
-import { google } from 'googleapis';
 
 dotenv.config();
 const app = express();
@@ -73,6 +72,7 @@ const allowedOrigins = [
   "http://localhost:5174", 
   "http://localhost:5175",
   "http://localhost:5176",
+  "http://hospital-pnu.up.railway.app",
   "https://frontend-production-a002.up.railway.app"
 ];
 
@@ -362,20 +362,7 @@ app.post("/register", authLimiter, async (req, res) => {
       console.log(`📧 Sending email via Gmail API to ${email}`);
       console.log(`📧 Gmail User: ${process.env.GMAIL_USER ? 'Configured' : 'Not configured'}`);
       
-      // Setup OAuth2 client
-      const oauth2Client = new google.auth.OAuth2(
-        process.env.GMAIL_CLIENT_ID,
-        process.env.GMAIL_CLIENT_SECRET,
-        process.env.GMAIL_REDIRECT_URI
-      );
-      
-      // Set refresh token
-      oauth2Client.setCredentials({
-        refresh_token: process.env.GMAIL_REFRESH_TOKEN
-      });
-      
-      // Create Gmail API instance
-      const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
+      const axios = await import('axios');
       
       // Create email message in RFC 2822 format with proper UTF-8 encoding
       const subject = "รหัสยืนยันตัวตน - ระบบจองรถรับ-ส่งโรงพยาบาล";
@@ -441,14 +428,21 @@ app.post("/register", authLimiter, async (req, res) => {
       // Encode message in base64
       const encodedMessage = Buffer.from(emailMessage).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
       
+      const emailData = {
+        raw: encodedMessage
+      };
       
-      // Send email using googleapis
-      const response = await gmail.users.messages.send({
-        userId: 'me',
-        requestBody: {
-          raw: encodedMessage
+      const response = await axios.default.post(
+        `https://gmail.googleapis.com/gmail/v1/users/${process.env.GMAIL_USER}/messages/send`,
+        emailData,
+        {
+          headers: {
+            'Authorization': `Bearer ${process.env.GMAIL_ACCESS_TOKEN}`,
+            'Content-Type': 'application/json'
+          },
+          timeout: 30000
         }
-      });
+      );
       
       console.log(`✅ Email sent successfully via Gmail API to ${email}`);
       console.log(`📧 Gmail Message ID: ${response.data.id}`);
@@ -457,8 +451,7 @@ app.post("/register", authLimiter, async (req, res) => {
       console.error(`❌ Gmail API failed:`, gmailError.message);
       console.log(`⚠️ Email failed for user ${email}, OTP: ${otp}`);
       console.log(`📧 Gmail User: ${process.env.GMAIL_USER ? 'Configured' : 'Not configured'}`);
-      console.log(`📧 Gmail Client ID: ${process.env.GMAIL_CLIENT_ID ? 'Configured' : 'Not configured'}`);
-      console.log(`📧 Gmail Refresh Token: ${process.env.GMAIL_REFRESH_TOKEN ? 'Configured' : 'Not configured'}`);
+      console.log(`📧 Gmail Access Token: ${process.env.GMAIL_ACCESS_TOKEN ? 'Configured' : 'Not configured'}`);
       if (gmailError.response) {
         console.log(`📧 Gmail Error Response:`, gmailError.response.data);
       }
@@ -1222,7 +1215,7 @@ app.get("/health/detailed", async (req, res) => {
       services: {
         database: "connected",
         api: "running",
-        email: process.env.GMAIL_USER && process.env.GMAIL_REFRESH_TOKEN ? "gmail_api_configured" : "not_configured"
+        email: process.env.GMAIL_USER ? "gmail_api_configured" : "not_configured"
       }
     });
   } catch (err) {
@@ -1240,7 +1233,7 @@ app.get("/health/detailed", async (req, res) => {
 app.get("/health/email", async (req, res) => {
   try {
     // Simple health check - just verify API key is configured
-    if (!process.env.GMAIL_USER || !process.env.GMAIL_REFRESH_TOKEN) {
+    if (!process.env.GMAIL_USER) {
       return res.json({
         success: false,
         status: "not_configured",
@@ -1254,7 +1247,7 @@ app.get("/health/email", async (req, res) => {
       status: "configured",
       message: "Gmail API is configured",
       user: process.env.GMAIL_USER ? "present" : "missing",
-      refreshToken: process.env.GMAIL_REFRESH_TOKEN ? "present" : "missing"
+      token: process.env.GMAIL_ACCESS_TOKEN ? "present" : "missing"
     });
   } catch (err) {
     console.error("Email health check error:", err);
@@ -1465,7 +1458,7 @@ const server = app.listen(PORT, HOST, () => {
   console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`📊 Frontend URL: ${process.env.FRONTEND_URL || 'http://localhost:5173'}`);
   console.log(`🔗 Health Check: http://${HOST}:${PORT}/health`);
-  console.log(`📧 Email Config: ${process.env.GMAIL_USER && process.env.GMAIL_REFRESH_TOKEN ? 'Gmail API Configured' : 'Not configured'}`);
+  console.log(`📧 Email Config: ${process.env.GMAIL_USER ? 'Gmail API Configured' : 'Not configured'}`);
   console.log(`🗄️ Database: ${process.env.DB_HOST ? 'Configured' : 'Not configured'}`);
   console.log(`✅ Server ready for health checks`);
 });
