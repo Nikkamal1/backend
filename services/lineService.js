@@ -193,28 +193,41 @@ class LineService {
       }
 
       const [appointments] = await connection.query(
-        'SELECT * FROM appointments WHERE id = ?',
+        `SELECT a.*, u.name as user_name 
+         FROM appointments a 
+         LEFT JOIN users u ON a.user_id = u.id 
+         WHERE a.id = ?`,
         [appointmentId]
       );
       if (appointments.length === 0) throw new Error('Appointment not found');
       const appointment = appointments[0];
 
+      // สร้างชื่อผู้ป่วย
+      const patientName = `${appointment.first_name} ${appointment.last_name}`.trim();
+      const userName = appointment.user_name || 'ไม่ระบุ';
+
       let message = '';
       switch (notificationType) {
         case 'appointment_approved':
           message = `✅ การจองของคุณได้รับการอนุมัติแล้ว!\n\n` +
+                    `👤 ผู้ป่วย: ${patientName}\n` +
+                    `👨‍💼 ผู้จอง: ${userName}\n` +
                     `📅 วันที่: ${new Date(appointment.appointment_date).toLocaleDateString('th-TH')}\n` +
                     `🕐 เวลา: ${appointment.appointment_time}\n` +
                     `🏥 โรงพยาบาล: ${appointment.hospital}`;
           break;
         case 'appointment_rejected':
           message = `❌ การจองของคุณถูกปฏิเสธ\n\n` +
+                    `👤 ผู้ป่วย: ${patientName}\n` +
+                    `👨‍💼 ผู้จอง: ${userName}\n` +
                     `📅 วันที่: ${new Date(appointment.appointment_date).toLocaleDateString('th-TH')}\n` +
                     `🕐 เวลา: ${appointment.appointment_time}\n` +
                     `🏥 โรงพยาบาล: ${appointment.hospital}`;
           break;
         case 'appointment_cancelled':
           message = `🚫 การจองของคุณถูกยกเลิก\n\n` +
+                    `👤 ผู้ป่วย: ${patientName}\n` +
+                    `👨‍💼 ผู้จอง: ${userName}\n` +
                     `📅 วันที่: ${new Date(appointment.appointment_date).toLocaleDateString('th-TH')}\n` +
                     `🕐 เวลา: ${appointment.appointment_time}\n` +
                     `🏥 โรงพยาบาล: ${appointment.hospital}`;
