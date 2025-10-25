@@ -327,6 +327,11 @@ app.post("/register", authLimiter, async (req, res) => {
       return res.status(400).json({ success: false, message: "อีเมล์นี้มีผู้ใช้งานแล้ว" });
     }
 
+    // ลบ OTP ที่หมดอายุก่อนตรวจสอบ
+    await connection.query(
+      `DELETE FROM email_otps WHERE expires_at < NOW()`
+    );
+
     // ตรวจสอบว่ามี OTP ที่ยังไม่หมดอายุอยู่หรือไม่ (60 วินาที)
     const oneMinuteAgo = new Date(Date.now() - 60 * 1000);
     const [[existingOTP]] = await connection.query(
@@ -497,23 +502,38 @@ app.post("/register", authLimiter, async (req, res) => {
 async function cleanupExpiredOTPs() {
   try {
     const connection = await getConnection();
-    await connection.query(
-      `DELETE FROM email_otps WHERE expires_at < NOW() AND is_used = 0`
+    
+    // ลบ OTP ที่หมดอายุแล้ว (ทั้งที่ใช้แล้วและยังไม่ใช้)
+    const [result] = await connection.query(
+      `DELETE FROM email_otps WHERE expires_at < NOW()`
     );
+    
+    if (result.affectedRows > 0) {
+      console.log(`🧹 Cleaned up ${result.affectedRows} expired OTP(s)`);
+    }
+    
     await connection.end();
   } catch (err) {
-    console.error("Error cleaning up expired OTPs:", err);
+    console.error("❌ Error cleaning up expired OTPs:", err);
   }
 }
 
-// รัน cleanup ทุก 5 นาที
-setInterval(cleanupExpiredOTPs, 5 * 60 * 1000);
+// รัน cleanup ทุก 2 นาที (บ่อยขึ้นเพื่อความปลอดภัย)
+setInterval(cleanupExpiredOTPs, 2 * 60 * 1000);
+
+// รัน cleanup ครั้งแรกเมื่อ server เริ่มต้น
+cleanupExpiredOTPs();
 
 // ==================== Verify OTP ====================
 app.post("/verify-otp", async (req, res) => {
   try {
     const { email, otpInput } = req.body;
     const connection = await getConnection();
+
+    // ลบ OTP ที่หมดอายุก่อนตรวจสอบ
+    await connection.query(
+      `DELETE FROM email_otps WHERE expires_at < NOW()`
+    );
 
     // ตรวจสอบ OTP ที่เก็บไว้ใน email_otps
     const [[otpRow]] = await connection.query(
