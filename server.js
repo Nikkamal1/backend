@@ -327,11 +327,11 @@ app.post("/register", authLimiter, async (req, res) => {
       return res.status(400).json({ success: false, message: "อีเมล์นี้มีผู้ใช้งานแล้ว" });
     }
 
-    // ตรวจสอบว่ามี OTP ที่ยังไม่หมดอายุอยู่หรือไม่ (10 นาที)
-    const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
+    // ตรวจสอบว่ามี OTP ที่ยังไม่หมดอายุอยู่หรือไม่ (60 วินาที)
+    const oneMinuteAgo = new Date(Date.now() - 60 * 1000);
     const [[existingOTP]] = await connection.query(
       `SELECT * FROM email_otps WHERE email = ? AND type = 'register' AND is_used = 0 AND created_at > ?`,
-      [email, tenMinutesAgo]
+      [email, oneMinuteAgo]
     );
     if (existingOTP) {
       await connection.end();
@@ -345,7 +345,7 @@ app.post("/register", authLimiter, async (req, res) => {
 
     // สร้าง OTP และเก็บข้อมูลไว้ใน email_otps (ยังไม่สร้าง user)
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 นาที
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 นาที
     const hashedPassword = await bcrypt.hash(password, 10);
 
     // เก็บข้อมูลผู้ใช้ไว้ใน email_otps table (ใช้ email เป็น key)
@@ -398,7 +398,7 @@ app.post("/register", authLimiter, async (req, res) => {
         `    <div style="background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%); border: 2px solid #d1d5db; border-radius: 12px; padding: 30px; text-align: center; margin: 25px 0;">`,
         `      <p style="color: #6b7280; font-size: 14px; margin: 0 0 10px 0; font-weight: 500;">รหัสยืนยันตัวตน</p>`,
         `      <div style="font-size: 32px; font-weight: 700; color: #1f2937; letter-spacing: 8px; margin: 10px 0;">${otp}</div>`,
-        `      <p style="color: #6b7280; font-size: 12px; margin: 10px 0 0 0;">ใช้ได้ 15 นาที</p>`,
+        `      <p style="color: #6b7280; font-size: 12px; margin: 10px 0 0 0;">ใช้ได้ 5 นาที</p>`,
         `    </div>`,
         `    `,
         `    <div style="background-color: #fef3c7; border-left: 4px solid #f59e0b; padding: 15px; margin: 25px 0; border-radius: 4px;">`,
@@ -461,7 +461,7 @@ app.post("/register", authLimiter, async (req, res) => {
     
     // 🛡️ Return different messages based on email status
     if (emailSent) {
-      res.json({ success: true, message: "ส่ง OTP ไปยังอีเมล์เรียบร้อย" });
+    res.json({ success: true, message: "ส่ง OTP ไปยังอีเมล์เรียบร้อย" });
     } else {
       res.json({ 
         success: true, 
@@ -564,9 +564,9 @@ app.get("/profile/:id", async (req, res) => {
 
 app.put("/profile/:id", async (req, res) => {
   try {
-    const { id } = req.params;
+  const { id } = req.params;
     const { name, email, type, currentPassword, newPassword } = req.body;
-    const connection = await getConnection();
+  const connection = await getConnection();
 
     // ตรวจสอบว่าผู้ใช้มีอยู่จริง
     const [[user]] = await connection.query("SELECT * FROM users WHERE id = ?", [id]);
@@ -628,9 +628,9 @@ app.put("/profile/:id", async (req, res) => {
         return res.status(400).json({ success: false, message: "อีเมลนี้มีผู้ใช้งานแล้ว" });
       }
 
-      await connection.query("UPDATE users SET name=?, email=? WHERE id=?", [name, email, id]);
+  await connection.query("UPDATE users SET name=?, email=? WHERE id=?", [name, email, id]);
       
-      await connection.end();
+  await connection.end();
       res.json({ success: true, message: "อัปเดตข้อมูลสำเร็จ" });
     }
   } catch (err) {
@@ -658,7 +658,7 @@ app.post("/appointments/user/:userId", async (req, res) => {
     // Debug logs (remove in production)
     if (process.env.NODE_ENV === 'development') {
       console.log("Status being inserted:", `"${"รอการอนุมัติ"}"`);
-      console.log("Payload:", payload);
+    console.log("Payload:", payload);
     }
 
     // ดึงชื่อจังหวัด/อำเภอ/ตำบล/โรงพยาบาลจาก payload
@@ -1014,7 +1014,7 @@ app.get("/appointments/:id", async (req, res) => {
       [id]
     );
 
-    await connection.end();
+      await connection.end();
 
     if (!appointment) {
       return res.status(404).json({ success: false, message: "ไม่พบการจอง" });
