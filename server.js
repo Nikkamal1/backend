@@ -69,12 +69,12 @@ const isRailway = process.env.RAILWAY_PUBLIC_DOMAIN;
 
 const allowedOrigins = [
   process.env.FRONTEND_URL || "http://localhost:5173",
-  "http://localhost:5173",
-  "http://localhost:5174", 
-  "http://localhost:5175",
-  "http://localhost:5176",
+  // "http://localhost:5173",
+  // "http://localhost:5174", 
+  // "http://localhost:5175",
+  // "http://localhost:5176",
   "https://hospital-pnu.up.railway.app",
-  "https://frontend-production-a002.up.railway.app"
+  // "https://frontend-production-a002.up.railway.app"
 ];
 
 // เพิ่ม Production domains
@@ -328,6 +328,11 @@ app.post("/register", authLimiter, async (req, res) => {
       await connection.end();
       return res.status(400).json({ success: false, message: "อีเมล์นี้มีผู้ใช้งานแล้ว" });
     }
+
+    // ลบ OTP ที่หมดอายุก่อนตรวจสอบ
+    await connection.query(
+      `DELETE FROM email_otps WHERE expires_at < NOW()`
+    );
 
     // ตรวจสอบว่ามี OTP ที่ยังไม่หมดอายุอยู่หรือไม่ (60 วินาที)
     const oneMinuteAgo = new Date(Date.now() - 60 * 1000);
@@ -610,23 +615,111 @@ app.post("/register", authLimiter, async (req, res) => {
 async function cleanupExpiredOTPs() {
   try {
     const connection = await getConnection();
-    await connection.query(
-      `DELETE FROM email_otps WHERE expires_at < NOW() AND is_used = 0`
+    
+    // ลบ OTP ที่หมดอายุแล้ว (ทั้งที่ใช้แล้วและยังไม่ใช้)
+    const [result] = await connection.query(
+      `DELETE FROM email_otps WHERE expires_at < NOW()`
     );
+    
+    if (result.affectedRows > 0) {
+      console.log(`🧹 Cleaned up ${result.affectedRows} expired OTP(s)`);
+    }
+    
     await connection.end();
   } catch (err) {
-    console.error("Error cleaning up expired OTPs:", err);
+    console.error("❌ Error cleaning up expired OTPs:", err);
   }
 }
 
-// รัน cleanup ทุก 5 นาที
-setInterval(cleanupExpiredOTPs, 5 * 60 * 1000);
+// รัน cleanup ทุก 2 นาที (บ่อยขึ้นเพื่อความปลอดภัย)
+setInterval(cleanupExpiredOTPs, 2 * 60 * 1000);
+
+// รัน cleanup ครั้งแรกเมื่อ server เริ่มต้น
+cleanupExpiredOTPs();
+
+// ==================== Manual OTP Cleanup Endpoint ====================
+app.post("/admin/cleanup-otps", async (req, res) => {
+  try {
+    const connection = await getConnection();
+    
+    // ลบ OTP ที่หมดอายุแล้ว
+    const [result] = await connection.query(
+      `DELETE FROM email_otps WHERE expires_at < NOW()`
+    );
+    
+    await connection.end();
+    
+    res.json({
+      success: true,
+      message: `🧹 ลบ OTP ที่หมดอายุแล้ว ${result.affectedRows} รายการ`,
+      deletedCount: result.affectedRows
+    });
+  } catch (err) {
+    console.error("Manual OTP cleanup error:", err);
+    res.status(500).json({ 
+      success: false, 
+      message: "ไม่สามารถลบ OTP ที่หมดอายุได้",
+      error: err.message
+    });
+  }
+});
+
+// ==================== Check OTP Status Endpoint ====================
+app.get("/admin/otp-status", async (req, res) => {
+  try {
+    const connection = await getConnection();
+    
+    // ตรวจสอบจำนวน OTP ทั้งหมด
+    const [totalResult] = await connection.query(
+      `SELECT COUNT(*) as total FROM email_otps`
+    );
+    
+    // ตรวจสอบจำนวน OTP ที่หมดอายุ
+    const [expiredResult] = await connection.query(
+      `SELECT COUNT(*) as expired FROM email_otps WHERE expires_at < NOW()`
+    );
+    
+    // ตรวจสอบจำนวน OTP ที่ยังไม่หมดอายุ
+    const [activeResult] = await connection.query(
+      `SELECT COUNT(*) as active FROM email_otps WHERE expires_at >= NOW()`
+    );
+    
+    // ตรวจสอบ OTP ล่าสุด
+    const [recentResult] = await connection.query(
+      `SELECT email, type, created_at, expires_at, is_used FROM email_otps ORDER BY created_at DESC LIMIT 10`
+    );
+    
+    await connection.end();
+    
+    res.json({
+      success: true,
+      data: {
+        total: totalResult[0].total,
+        expired: expiredResult[0].expired,
+        active: activeResult[0].active,
+        recent: recentResult
+      }
+    });
+  } catch (err) {
+    console.error("OTP status check error:", err);
+    res.status(500).json({ 
+      success: false, 
+      message: "ไม่สามารถตรวจสอบสถานะ OTP ได้",
+      error: err.message
+    });
+  }
+});
 
 // ==================== Verify OTP ====================
 app.post("/verify-otp", async (req, res) => {
   try {
     const { email, otpInput } = req.body;
     const connection = await getConnection();
+
+    // ลบ OTP ที่หมดอายุก่อนตรวจสอบ
+    await connection.query(
+      `DELETE FROM email_otps WHERE expires_at < NOW()`
+    );
 
     // ตรวจสอบ OTP ที่เก็บไว้ใน email_otps
     const [[otpRow]] = await connection.query(
