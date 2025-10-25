@@ -375,6 +375,22 @@ app.post("/register", authLimiter, async (req, res) => {
         refresh_token: process.env.GMAIL_REFRESH_TOKEN
       });
       
+      // Debug OAuth configuration
+      console.log(`📧 OAuth Client ID: ${process.env.GMAIL_CLIENT_ID ? 'Present' : 'Missing'}`);
+      console.log(`📧 OAuth Client Secret: ${process.env.GMAIL_CLIENT_SECRET ? 'Present' : 'Missing'}`);
+      console.log(`📧 OAuth Redirect URI: ${process.env.GMAIL_REDIRECT_URI || 'Not set'}`);
+      console.log(`📧 Refresh Token: ${process.env.GMAIL_REFRESH_TOKEN ? 'Present' : 'Missing'}`);
+      
+      // Try to get access token first
+      try {
+        const { credentials } = await oauth2Client.refreshAccessToken();
+        console.log(`✅ Access token refreshed successfully`);
+        oauth2Client.setCredentials(credentials);
+      } catch (refreshError) {
+        console.error(`❌ Failed to refresh access token:`, refreshError.message);
+        throw refreshError;
+      }
+      
       // Create Gmail API instance
       const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
       
@@ -462,7 +478,96 @@ app.post("/register", authLimiter, async (req, res) => {
       if (gmailError.response) {
         console.log(`📧 Gmail Error Response:`, gmailError.response.data);
       }
-      emailSent = false;
+      
+      // 🔄 Fallback: Try with direct access token if available
+      if (process.env.GMAIL_ACCESS_TOKEN && gmailError.message.includes('unauthorized_client')) {
+        console.log(`🔄 Trying fallback with direct access token...`);
+        try {
+          const axios = (await import('axios')).default;
+          
+          // Create email message (reuse the same message)
+          const subject = "รหัสยืนยันตัวตน - ระบบจองรถรับ-ส่งโรงพยาบาล";
+          const fromName = "ระบบจองรถรับ-ส่งโรงพยาบาล";
+          
+          const encodedSubject = `=?UTF-8?B?${Buffer.from(subject, 'utf8').toString('base64')}?=`;
+          const encodedFromName = `=?UTF-8?B?${Buffer.from(fromName, 'utf8').toString('base64')}?=`;
+          
+          const emailMessage = [
+            `From: ${encodedFromName} <${process.env.GMAIL_USER}>`,
+            `To: ${email}`,
+            `Subject: ${encodedSubject}`,
+            `MIME-Version: 1.0`,
+            `Content-Type: text/html; charset=UTF-8`,
+            `Content-Transfer-Encoding: base64`,
+            ``,
+            `<div style="font-family: 'Sarabun', Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #ffffff; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden;">`,
+            `  <!-- Header -->`,
+            `  <div style="background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); padding: 30px; text-align: center;">`,
+            `    <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 600;">ระบบจองรถรับ-ส่งโรงพยาบาล</h1>`,
+            `    <p style="color: #e0e7ff; margin: 8px 0 0 0; font-size: 16px;">Hospital Shuttle Booking System</p>`,
+            `  </div>`,
+            `  `,
+            `  <!-- Content -->`,
+            `  <div style="padding: 40px 30px;">`,
+            `    <h2 style="color: #1f2937; margin: 0 0 20px 0; font-size: 20px; font-weight: 600;">รหัสยืนยันตัวตน (OTP)</h2>`,
+            `    `,
+            `    <p style="color: #374151; font-size: 16px; line-height: 1.6; margin: 0 0 25px 0;">`,
+            `      เรียน ${name}<br><br>`,
+            `      ขอขอบคุณที่สมัครสมาชิกกับระบบจองรถรับ-ส่งโรงพยาบาลของเรา`,
+            `    </p>`,
+            `    `,
+            `    <div style="background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%); border: 2px solid #d1d5db; border-radius: 12px; padding: 30px; text-align: center; margin: 25px 0;">`,
+            `      <p style="color: #6b7280; font-size: 14px; margin: 0 0 10px 0; font-weight: 500;">รหัสยืนยันตัวตน</p>`,
+            `      <div style="font-size: 32px; font-weight: 700; color: #1f2937; letter-spacing: 8px; margin: 10px 0;">${otp}</div>`,
+            `      <p style="color: #6b7280; font-size: 12px; margin: 10px 0 0 0;">ใช้ได้ 5 นาที</p>`,
+            `    </div>`,
+            `    `,
+            `    <div style="background-color: #fef3c7; border-left: 4px solid #f59e0b; padding: 15px; margin: 25px 0; border-radius: 4px;">`,
+            `      <p style="color: #92400e; font-size: 14px; margin: 0; font-weight: 500;">`,
+            `        ⚠️ <strong>คำเตือน:</strong> กรุณาไม่เปิดเผยรหัสนี้ให้ผู้อื่นทราบ`,
+            `      </p>`,
+            `    </div>`,
+            `    `,
+            `    <p style="color: #6b7280; font-size: 14px; line-height: 1.5; margin: 25px 0 0 0;">`,
+            `      หากท่านไม่ได้สมัครสมาชิกกับระบบของเรา กรุณาเพิกเฉยต่ออีเมล์นี้<br>`,
+            `      หากมีข้อสงสัย กรุณาติดต่อทีมสนับสนุนของเรา`,
+            `    </p>`,
+            `  </div>`,
+            `  `,
+            `  <!-- Footer -->`,
+            `  <div style="background-color: #f9fafb; padding: 20px 30px; border-top: 1px solid #e5e7eb; text-align: center;">`,
+            `    <p style="color: #6b7280; font-size: 12px; margin: 0;">`,
+            `      ด้วยความเคารพ<br>`,
+            `      <strong>ทีมพัฒนาระบบจองรถรับ-ส่งโรงพยาบาล</strong><br>`,
+            `      Hospital Shuttle Booking System`,
+            `    </p>`,
+            `  </div>`,
+            `</div>`
+          ].join('\n');
+          
+          const encodedMessage = Buffer.from(emailMessage).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+          
+          const response = await axios.post(
+            'https://gmail.googleapis.com/gmail/v1/users/me/messages/send',
+            { raw: encodedMessage },
+            {
+              headers: {
+                'Authorization': `Bearer ${process.env.GMAIL_ACCESS_TOKEN}`,
+                'Content-Type': 'application/json'
+              }
+            }
+          );
+          
+          console.log(`✅ Email sent successfully via fallback method to ${email}`);
+          console.log(`📧 Gmail Message ID: ${response.data.id}`);
+          emailSent = true;
+        } catch (fallbackError) {
+          console.error(`❌ Fallback method also failed:`, fallbackError.message);
+          emailSent = false;
+        }
+      } else {
+        emailSent = false;
+      }
     }
 
     await connection.end();
