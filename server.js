@@ -74,7 +74,7 @@ const allowedOrigins = [
   "http://localhost:5175",
   "http://localhost:5176",
   "https://hospital-pnu.up.railway.app",
-  // "https://frontend-production-a002.up.railway.app"
+  "https://frontend-production-a002.up.railway.app"
 ];
 
 // เพิ่ม Production domains
@@ -329,11 +329,11 @@ app.post("/register", authLimiter, async (req, res) => {
       return res.status(400).json({ success: false, message: "อีเมล์นี้มีผู้ใช้งานแล้ว" });
     }
 
-    // ตรวจสอบว่ามี OTP ที่ยังไม่หมดอายุอยู่หรือไม่ (10 นาที)
-    const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
+    // ตรวจสอบว่ามี OTP ที่ยังไม่หมดอายุอยู่หรือไม่ (60 วินาที)
+    const oneMinuteAgo = new Date(Date.now() - 60 * 1000);
     const [[existingOTP]] = await connection.query(
       `SELECT * FROM email_otps WHERE email = ? AND type = 'register' AND is_used = 0 AND created_at > ?`,
-      [email, tenMinutesAgo]
+      [email, oneMinuteAgo]
     );
     if (existingOTP) {
       await connection.end();
@@ -347,7 +347,7 @@ app.post("/register", authLimiter, async (req, res) => {
 
     // สร้าง OTP และเก็บข้อมูลไว้ใน email_otps (ยังไม่สร้าง user)
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 นาที
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 นาที
     const hashedPassword = await bcrypt.hash(password, 10);
 
     // เก็บข้อมูลผู้ใช้ไว้ใน email_otps table (ใช้ email เป็น key)
@@ -356,27 +356,15 @@ app.post("/register", authLimiter, async (req, res) => {
       [email, otp, expiresAt, JSON.stringify({ name, email, password: hashedPassword })]
     );
 
-    // 🛡️ Send email using Gmail API (use your own Gmail to send to anyone)
+    // 🛡️ Send email using Gmail API (simplified approach)
     let emailSent = false;
     
     try {
       console.log(`📧 Sending email via Gmail API to ${email}`);
       console.log(`📧 Gmail User: ${process.env.GMAIL_USER ? 'Configured' : 'Not configured'}`);
       
-      // Setup OAuth2 client with refresh token
-      const oauth2Client = new google.auth.OAuth2(
-        process.env.GMAIL_CLIENT_ID,
-        process.env.GMAIL_CLIENT_SECRET,
-        process.env.GMAIL_REDIRECT_URI
-      );
-      
-      // Set refresh token
-      oauth2Client.setCredentials({
-        refresh_token: process.env.GMAIL_REFRESH_TOKEN
-      });
-      
-      // Create Gmail API instance
-      const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
+      // Use direct Gmail API with access token (simpler approach)
+      const axios = (await import('axios')).default;
       
       // Create email message in RFC 2822 format with proper UTF-8 encoding
       const subject = "รหัสยืนยันตัวตน - ระบบจองรถรับ-ส่งโรงพยาบาล";
@@ -413,7 +401,7 @@ app.post("/register", authLimiter, async (req, res) => {
         `    <div style="background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%); border: 2px solid #d1d5db; border-radius: 12px; padding: 30px; text-align: center; margin: 25px 0;">`,
         `      <p style="color: #6b7280; font-size: 14px; margin: 0 0 10px 0; font-weight: 500;">รหัสยืนยันตัวตน</p>`,
         `      <div style="font-size: 32px; font-weight: 700; color: #1f2937; letter-spacing: 8px; margin: 10px 0;">${otp}</div>`,
-        `      <p style="color: #6b7280; font-size: 12px; margin: 10px 0 0 0;">ใช้ได้ 15 นาที</p>`,
+        `      <p style="color: #6b7280; font-size: 12px; margin: 10px 0 0 0;">ใช้ได้ 5 นาที</p>`,
         `    </div>`,
         `    `,
         `    <div style="background-color: #fef3c7; border-left: 4px solid #f59e0b; padding: 15px; margin: 25px 0; border-radius: 4px;">`,
@@ -442,14 +430,19 @@ app.post("/register", authLimiter, async (req, res) => {
       // Encode message in base64
       const encodedMessage = Buffer.from(emailMessage).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
       
-      
-      // Send email using googleapis (auto refresh access token)
-      const response = await gmail.users.messages.send({
-        userId: 'me',
-        requestBody: {
+      // Send email using Gmail API with access token
+      const response = await axios.post(
+        'https://gmail.googleapis.com/gmail/v1/users/me/messages/send',
+        {
           raw: encodedMessage
+        },
+        {
+          headers: {
+            'Authorization': `Bearer ${process.env.GMAIL_ACCESS_TOKEN}`,
+            'Content-Type': 'application/json'
+          }
         }
-      });
+      );
       
       console.log(`✅ Email sent successfully via Gmail API to ${email}`);
       console.log(`📧 Gmail Message ID: ${response.data.id}`);
@@ -458,8 +451,7 @@ app.post("/register", authLimiter, async (req, res) => {
       console.error(`❌ Gmail API failed:`, gmailError.message);
       console.log(`⚠️ Email failed for user ${email}, OTP: ${otp}`);
       console.log(`📧 Gmail User: ${process.env.GMAIL_USER ? 'Configured' : 'Not configured'}`);
-      console.log(`📧 Gmail Client ID: ${process.env.GMAIL_CLIENT_ID ? 'Configured' : 'Not configured'}`);
-      console.log(`📧 Gmail Refresh Token: ${process.env.GMAIL_REFRESH_TOKEN ? 'Configured' : 'Not configured'}`);
+      console.log(`📧 Gmail Access Token: ${process.env.GMAIL_ACCESS_TOKEN ? 'Configured' : 'Not configured'}`);
       if (gmailError.response) {
         console.log(`📧 Gmail Error Response:`, gmailError.response.data);
       }
@@ -1223,7 +1215,7 @@ app.get("/health/detailed", async (req, res) => {
       services: {
         database: "connected",
         api: "running",
-        email: process.env.GMAIL_USER && process.env.GMAIL_REFRESH_TOKEN ? "gmail_api_configured" : "not_configured"
+        email: process.env.GMAIL_USER && process.env.GMAIL_ACCESS_TOKEN ? "gmail_api_configured" : "not_configured"
       }
     });
   } catch (err) {
@@ -1241,7 +1233,7 @@ app.get("/health/detailed", async (req, res) => {
 app.get("/health/email", async (req, res) => {
   try {
     // Simple health check - just verify API key is configured
-    if (!process.env.GMAIL_USER || !process.env.GMAIL_REFRESH_TOKEN) {
+    if (!process.env.GMAIL_USER || !process.env.GMAIL_ACCESS_TOKEN) {
       return res.json({
         success: false,
         status: "not_configured",
@@ -1255,7 +1247,7 @@ app.get("/health/email", async (req, res) => {
       status: "configured",
       message: "Gmail API is configured",
       user: process.env.GMAIL_USER ? "present" : "missing",
-      refreshToken: process.env.GMAIL_REFRESH_TOKEN ? "present" : "missing"
+      accessToken: process.env.GMAIL_ACCESS_TOKEN ? "present" : "missing"
     });
   } catch (err) {
     console.error("Email health check error:", err);
@@ -1466,7 +1458,7 @@ const server = app.listen(PORT, HOST, () => {
   console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`📊 Frontend URL: ${process.env.FRONTEND_URL || 'http://localhost:5173'}`);
   console.log(`🔗 Health Check: http://${HOST}:${PORT}/health`);
-  console.log(`📧 Email Config: ${process.env.GMAIL_USER && process.env.GMAIL_REFRESH_TOKEN ? 'Gmail API Configured' : 'Not configured'}`);
+  console.log(`📧 Email Config: ${process.env.GMAIL_USER && process.env.GMAIL_ACCESS_TOKEN ? 'Gmail API Configured' : 'Not configured'}`);
   console.log(`🗄️ Database: ${process.env.DB_HOST ? 'Configured' : 'Not configured'}`);
   console.log(`✅ Server ready for health checks`);
 });
