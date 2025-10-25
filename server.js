@@ -352,19 +352,38 @@ app.post("/register", authLimiter, async (req, res) => {
 
     // สร้าง OTP และเก็บข้อมูลไว้ใน email_otps (ยังไม่สร้าง user)
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 นาที
     const hashedPassword = await bcrypt.hash(password, 10);
     
     console.log(`📧 Creating OTP for ${email}:`);
     console.log(`📧 Current time: ${new Date().toISOString()}`);
-    console.log(`📧 Expires at: ${expiresAt.toISOString()}`);
-    console.log(`📧 Time difference: ${(expiresAt.getTime() - Date.now()) / 1000 / 60} minutes`);
+    console.log(`📧 Using MySQL NOW() + INTERVAL 5 MINUTE for expiry`);
 
     // เก็บข้อมูลผู้ใช้ไว้ใน email_otps table (ใช้ email เป็น key)
+    // ใช้ MySQL NOW() + INTERVAL 5 MINUTE เพื่อให้แน่ใจว่าใช้ timezone ของฐานข้อมูล
     await connection.query(
-      `INSERT INTO email_otps (email, otp, type, expires_at, user_data) VALUES (?, ?, 'register', ?, ?)`,
-      [email, otp, expiresAt, JSON.stringify({ name, email, password: hashedPassword })]
+      `INSERT INTO email_otps (email, otp, type, expires_at, user_data) VALUES (?, ?, 'register', NOW() + INTERVAL 5 MINUTE, ?)`,
+      [email, otp, JSON.stringify({ name, email, password: hashedPassword })]
     );
+    
+    // ตรวจสอบ OTP ที่สร้างใหม่
+    const [[newOTP]] = await connection.query(
+      `SELECT email, otp, created_at, expires_at FROM email_otps WHERE email = ? AND otp = ? ORDER BY created_at DESC LIMIT 1`,
+      [email, otp]
+    );
+    
+    if (newOTP) {
+      console.log(`📧 OTP created successfully:`);
+      console.log(`📧 Email: ${newOTP.email}`);
+      console.log(`📧 OTP: ${newOTP.otp}`);
+      console.log(`📧 Created at: ${newOTP.created_at}`);
+      console.log(`📧 Expires at: ${newOTP.expires_at}`);
+      
+      // คำนวณเวลาที่เหลือ
+      const now = new Date();
+      const expiresAt = new Date(newOTP.expires_at);
+      const timeLeft = Math.round((expiresAt.getTime() - now.getTime()) / 1000 / 60);
+      console.log(`📧 Time left: ${timeLeft} minutes`);
+    }
 
     // 🛡️ Send email using Gmail API with auto-refresh (production ready)
     let emailSent = false;
