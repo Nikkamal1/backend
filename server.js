@@ -354,6 +354,11 @@ app.post("/register", authLimiter, async (req, res) => {
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 นาที
     const hashedPassword = await bcrypt.hash(password, 10);
+    
+    console.log(`📧 Creating OTP for ${email}:`);
+    console.log(`📧 Current time: ${new Date().toISOString()}`);
+    console.log(`📧 Expires at: ${expiresAt.toISOString()}`);
+    console.log(`📧 Time difference: ${(expiresAt.getTime() - Date.now()) / 1000 / 60} minutes`);
 
     // เก็บข้อมูลผู้ใช้ไว้ใน email_otps table (ใช้ email เป็น key)
     await connection.query(
@@ -659,6 +664,33 @@ app.post("/admin/cleanup-otps", async (req, res) => {
     res.status(500).json({ 
       success: false, 
       message: "ไม่สามารถลบ OTP ที่หมดอายุได้",
+      error: err.message
+    });
+  }
+});
+
+// ==================== Clear All OTPs Endpoint (for testing) ====================
+app.post("/admin/clear-all-otps", async (req, res) => {
+  try {
+    const connection = await getConnection();
+    
+    // ลบ OTP ทั้งหมด
+    const [result] = await connection.query(
+      `DELETE FROM email_otps`
+    );
+    
+    await connection.end();
+    
+    res.json({
+      success: true,
+      message: `🧹 ลบ OTP ทั้งหมดแล้ว ${result.affectedRows} รายการ`,
+      deletedCount: result.affectedRows
+    });
+  } catch (err) {
+    console.error("Clear all OTPs error:", err);
+    res.status(500).json({ 
+      success: false, 
+      message: "ไม่สามารถลบ OTP ทั้งหมดได้",
       error: err.message
     });
   }
